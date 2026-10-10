@@ -26,6 +26,11 @@ For commercial licensing, please contact support@quantumnous.com
  * that activates it. Loaded globally so font-switching is instantaneous
  * with no FOUT once the variable is fetched. */
 @import '@fontsource-variable/lora';
+/* Body and code faces for the base palette declared in theme.css
+ * (`--font-sans` → Inter, `--font-mono` → Roboto Mono). Loaded globally so
+ * both resolve to the real webfonts rather than the system fallbacks. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/roboto-mono';
 
 @import './theme.css';
 @import './theme-presets.css';
@@ -189,7 +194,7 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 @utility max-w-container {
-  max-width: 1280px;
+  max-width: 1200px;
 }
 
 @utility max-w-container-lg {

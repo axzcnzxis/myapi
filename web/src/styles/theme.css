@@ -19,7 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: 'Public Sans Variable', 'Public Sans', sans-serif;
+  --font-sans:
+    'Inter Variable', 'Inter', 'Public Sans Variable', 'Public Sans', system-ui,
+    -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   /* Editorial serif token — the body face used by the `serif` font axis
    * and by presets that opt in (currently Anthropic). Lora carries only
    * Latin glyphs, so the stack walks through CJK serifs (Noto / Source Han
@@ -39,6 +41,9 @@ For commercial licensing, please contact support@quantumnous.com
   --font-manrope:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-mono:
+    'Roboto Mono Variable', 'Roboto Mono', ui-monospace, SFMono-Regular,
+    'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -67,6 +72,7 @@ For commercial licensing, please contact support@quantumnous.com
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-signal: var(--signal);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -94,7 +100,7 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 :root {
-  --radius: 1rem;
+  --radius: 0.75rem;
   --app-header-height: 3rem;
   /* Static build-channel fallback consumed when JS hasn't booted yet. */
   --app-rev: '2k6e8r7p';
@@ -103,33 +109,37 @@ For commercial licensing, please contact support@quantumnous.com
    * in theme-presets.css. Default mirrors `--font-sans` so behavior is
    * identical when no font preference is set. */
   --font-body: var(--font-sans);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.692 0.141 243.716);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.95 0 0);
-  --secondary-foreground: oklch(0.42 0.16 250);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.49 0 0);
-  --accent: color-mix(in oklch, var(--primary) 12%, var(--background));
-  --accent-foreground: oklch(0.145 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.596 0.145 163.225);
-  --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.681 0.162 75.834);
-  --warning-foreground: oklch(0.145 0 0);
-  --info: oklch(0.588 0.158 241.966);
-  --info-foreground: oklch(0.985 0 0);
-  --neutral: oklch(0.708 0 0);
-  --neutral-foreground: oklch(0.145 0 0);
-  --border: oklch(0.93 0 0);
-  --input: oklch(0.93 0 0);
-  --ring: oklch(0.708 0.16 249.003);
+  /* Base palette — near-white canvas, navy ink ladder, and a single
+   * signal blue reserved for focus rings, hairlines and labels. Filled
+   * CTAs use the deep navy `--primary`, never the signal blue. */
+  --background: #fcfcfc;
+  --foreground: #14141e;
+  --card: #ffffff;
+  --card-foreground: #14141e;
+  --popover: #ffffff;
+  --popover-foreground: #14141e;
+  --primary: #0f1f3d;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f4fe;
+  --secondary-foreground: #0f1f3d;
+  --muted: #f0f4fe;
+  --muted-foreground: #696a72;
+  --accent: #f0f4fe;
+  --accent-foreground: #0f1f3d;
+  --destructive: #f26052;
+  --destructive-foreground: #ffffff;
+  --success: #16ca2e;
+  --success-foreground: #ffffff;
+  --warning: #ffa64d;
+  --warning-foreground: #020520;
+  --info: #0099ff;
+  --info-foreground: #ffffff;
+  --neutral: #696a72;
+  --neutral-foreground: #ffffff;
+  --border: #e4e8f2;
+  --input: #e4e8f2;
+  --ring: #145aff;
+  --signal: #145aff;
   --chart-1: oklch(0.72 0.18 250);
   --chart-2: oklch(0.65 0.15 200);
   --chart-3: oklch(0.7 0.12 280);
@@ -138,16 +148,16 @@ For commercial licensing, please contact support@quantumnous.com
   --overview-accent-1: oklch(0.72 0.18 250);
   --overview-accent-2: oklch(0.65 0.15 200);
   --overview-accent-3: oklch(0.7 0.12 280);
-  --sidebar: color-mix(in oklch, var(--foreground) 0.5%, var(--background));
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.64 0.197 253.892);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: color-mix(in oklch, var(--primary) 12%, var(--background));
-  --sidebar-accent-foreground: oklch(0.579 0.196 255.909);
-  --sidebar-border: oklch(0.93 0 0);
-  --sidebar-ring: oklch(0.58 0.2 250);
-  --skeleton-base: oklch(0.97 0 0);
-  --skeleton-highlight: oklch(0.985 0 0);
+  --sidebar: #f7f9fd;
+  --sidebar-foreground: #14141e;
+  --sidebar-primary: #0f1f3d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f4fe;
+  --sidebar-accent-foreground: #0f1f3d;
+  --sidebar-border: #e4e8f2;
+  --sidebar-ring: #145aff;
+  --skeleton-base: #f0f2f7;
+  --skeleton-highlight: #f7f9fd;
   --table-row: var(--background);
   --table-header: color-mix(
     in oklch,
@@ -179,49 +189,51 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 .dark {
-  /* OpenAI-like dark mode with a crisp charcoal canvas. */
-  --background: oklch(0.235 0 0);
-  --foreground: oklch(0.965 0 0);
-  --card: oklch(0.285 0 0);
-  --card-foreground: oklch(0.965 0 0);
-  --popover: oklch(0.305 0 0);
-  --popover-foreground: oklch(0.965 0 0);
-  --primary: oklch(0.54 0.142 248.516);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.335 0 0);
-  --secondary-foreground: oklch(0.9 0.05 250);
-  --muted: oklch(0.305 0 0);
-  --muted-foreground: oklch(0.78 0 0);
-  --accent: color-mix(in oklch, var(--primary) 20%, var(--background));
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.696 0.17 162.48);
-  --success-foreground: oklch(0.145 0 0);
-  --warning: oklch(0.769 0.188 70.08);
-  --warning-foreground: oklch(0.145 0 0);
-  --info: oklch(0.613 0.14 239.919);
-  --info-foreground: oklch(0.145 0 0);
-  --neutral: oklch(0.76 0 0);
-  --neutral-foreground: oklch(0.155 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 17%);
-  --ring: oklch(0.554 0.148 250.726);
+  /* Inverted navy canvas. Filled CTAs flip to a light ink chip so the
+   * signal blue stays a hairline/label accent rather than a button fill. */
+  --background: #0b0f1a;
+  --foreground: #e9ecf5;
+  --card: #121828;
+  --card-foreground: #e9ecf5;
+  --popover: #171f31;
+  --popover-foreground: #e9ecf5;
+  --primary: #eef1f8;
+  --primary-foreground: #0b0f1a;
+  --secondary: #1b2338;
+  --secondary-foreground: #cfd8ee;
+  --muted: #1b2338;
+  --muted-foreground: #9aa3b8;
+  --accent: #1f2a44;
+  --accent-foreground: #eef1f8;
+  --destructive: #ff8574;
+  --destructive-foreground: #1a0b09;
+  --success: #35d24a;
+  --success-foreground: #04140a;
+  --warning: #ffb066;
+  --warning-foreground: #1a1005;
+  --info: #3aa8ff;
+  --info-foreground: #041019;
+  --neutral: #9aa3b8;
+  --neutral-foreground: #0b0f1a;
+  --border: rgb(255 255 255 / 12%);
+  --input: rgb(255 255 255 / 18%);
+  --ring: #4d7dff;
+  --signal: #4d7dff;
   --chart-1: oklch(0.76 0.14 250);
   --chart-2: oklch(0.76 0.13 200);
   --chart-3: oklch(0.76 0.13 285);
   --chart-4: oklch(0.75 0.16 325);
   --chart-5: oklch(0.76 0.14 155);
-  --sidebar: oklch(0.225 0 0);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.588 0.123 246.488);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: color-mix(in oklch, var(--primary) 20%, var(--background));
-  --sidebar-accent-foreground: oklch(0.9 0.05 250);
-  --sidebar-border: oklch(1 0 0 / 11%);
-  --sidebar-ring: oklch(0.7 0.17 250);
-  --skeleton-base: oklch(0.335 0 0);
-  --skeleton-highlight: oklch(0.44 0 0);
+  --sidebar: #0e1322;
+  --sidebar-foreground: #e9ecf5;
+  --sidebar-primary: #eef1f8;
+  --sidebar-primary-foreground: #0b0f1a;
+  --sidebar-accent: #1f2a44;
+  --sidebar-accent-foreground: #eef1f8;
+  --sidebar-border: rgb(255 255 255 / 12%);
+  --sidebar-ring: #4d7dff;
+  --skeleton-base: #1b2338;
+  --skeleton-highlight: #26304a;
   --table-row: var(--background);
   --table-header: color-mix(in oklch, var(--foreground) 6%, var(--background));
   --table-header-hover: color-mix(
