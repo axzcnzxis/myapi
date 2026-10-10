@@ -77,13 +77,25 @@ else
   "${COMPOSE[@]}" down --remove-orphans
 fi
 
-# 5. 移除本地镜像（仅 myapi:latest，不做全局清理）
-if docker image inspect myapi:latest >/dev/null 2>&1; then
-  log "移除本地镜像 myapi:latest"
-  docker image rm myapi:latest >/dev/null || warn "镜像 myapi:latest 移除失败（可能仍被其它容器引用）"
-else
-  log "未发现本地镜像 myapi:latest，跳过"
+# 5. 移除本地镜像（仅本项目的镜像，不做全局清理）
+IMAGES=()
+if [ -f .env ]; then
+  ENV_IMAGE="$(sed -n 's/^[[:space:]]*MYAPI_IMAGE[[:space:]]*=[[:space:]]*//p' .env | tail -n1 | tr -d "\"' \t\r")"
+  if [ -n "$ENV_IMAGE" ]; then
+    IMAGES+=("$ENV_IMAGE")
+  fi
 fi
+IMAGES+=("ghcr.io/axzcnzxis/myapi:latest")  # 默认预构建镜像
+IMAGES+=("myapi:latest")                    # 旧版本地构建标签
+
+for img in "${IMAGES[@]}"; do
+  if docker image inspect "$img" >/dev/null 2>&1; then
+    log "移除本地镜像 $img"
+    docker image rm "$img" >/dev/null || warn "镜像 $img 移除失败（可能仍被其它容器引用）"
+  else
+    log "未发现本地镜像 $img，跳过"
+  fi
+done
 
 # 6. --purge 时删除数据与日志目录
 if [ "$PURGE" = "1" ]; then

@@ -6,12 +6,14 @@
 #   curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
 #
 # 脚本会：获取源码 -> 随机生成数据库/Redis 凭据与会话密钥写入 .env
-#         -> 用 docker-compose.yml 构建并启动 myapi + PostgreSQL + Redis
+#         -> 拉取预构建镜像并启动 myapi + PostgreSQL + Redis（不在本机构建）
 #
 # 可用环境变量（写在命令前，例如 `MYAPI_PORT=8080 bash install.sh`）：
 #   MYAPI_DIR     源码/安装目录，默认 $PWD/myapi
 #   MYAPI_PORT    控制台对外端口，默认 32180；仅在首次生成 .env 时写入，
 #                 之后以 .env 里的 MYAPI_PORT 为准（脚本据此打印访问地址）
+#   MYAPI_IMAGE   使用的 myapi 镜像，默认 ghcr.io/axzcnzxis/myapi:latest；
+#                 同样仅在首次生成 .env 时写入，之后以 .env 里的值为准
 #   MYAPI_REF     分支或标签，默认 main
 #   MYAPI_REPO    源码仓库，默认 https://github.com/axzcnzxis/myapi.git
 #   MYAPI_TARBALL_URL      未安装 git 时的源码压缩包地址（默认按分支下载）
@@ -22,6 +24,7 @@
 set -euo pipefail
 
 PORT="${MYAPI_PORT:-32180}"
+IMAGE="${MYAPI_IMAGE:-ghcr.io/axzcnzxis/myapi:latest}"
 INSTALL_DIR="${MYAPI_DIR:-$PWD/myapi}"
 REPO_URL="${MYAPI_REPO:-https://github.com/axzcnzxis/myapi.git}"
 REF="${MYAPI_REF:-main}"
@@ -93,7 +96,7 @@ cd "$INSTALL_DIR"
 
 # 3. 生成 .env（凭据随机，不覆盖已有配置）
 if [ -f .env ]; then
-  log "已存在 .env，保留现有配置（如需改端口请编辑 $INSTALL_DIR/.env）"
+  log "已存在 .env，保留现有配置（如需改端口或镜像请编辑 $INSTALL_DIR/.env）"
 else
   log "生成随机凭据并写入 .env"
   ( umask 077; cat > .env <<EOF
@@ -104,6 +107,7 @@ POSTGRES_PASSWORD=$(rand_hex)
 REDIS_PASSWORD=$(rand_hex)
 SESSION_SECRET=$(rand_hex)
 MYAPI_PORT=$PORT
+MYAPI_IMAGE=$IMAGE
 NODE_NAME=myapi-node-1
 TZ=${TZ:-Asia/Shanghai}
 EOF
@@ -120,9 +124,29 @@ if [ -n "$EFFECTIVE_PORT" ]; then
   PORT="$EFFECTIVE_PORT"
 fi
 
-# 4. 构建并启动
-log "构建并启动容器（首次构建需拉取依赖，耗时较长）..."
-"${COMPOSE[@]}" up -d --build
+# 镜像同理：compose 只读 .env 与 shell 环境，脚本不会导出 MYAPI_IMAGE，
+# 因此复用已有 .env 时以 .env 中的镜像地址为准。
+EFFECTIVE_IMAGE="$(sed -n 's/^[[:space:]]*MYAPI_IMAGE[[:space:]]*=[[:space:]]*//p' .env | tail -n1 | tr -d "\"' \t\r")"
+if [ -n "$EFFECTIVE_IMAGE" ]; then
+  if [ -n "${MYAPI_IMAGE:-}" ] && [ "$MYAPI_IMAGE" != "$EFFECTIVE_IMAGE" ]; then
+    warn "命令行 MYAPI_IMAGE=$MYAPI_IMAGE 与 .env 中的 MYAPI_IMAGE=$EFFECTIVE_IMAGE 不一致，实际以 .env 为准"
+  fi
+  IMAGE="$EFFECTIVE_IMAGE"
+fi
+
+# 4. 拉取预构建镜像并启动
+# 不在本机构建：构建阶段要下载前端/后端依赖并编译，小内存机器（如 2G）容易被拖死。
+log "拉取镜像：$IMAGE"
+if ! "${COMPOSE[@]}" pull; then
+  warn "镜像拉取失败：请检查网络与镜像地址（当前为 $IMAGE，可用 MYAPI_IMAGE=<镜像地址> 指定其它来源）"
+  if grep -Eq '^[[:space:]]*build:' docker-compose.yml; then
+    warn "当前目录的 docker-compose.yml 是含 build: 的旧版配置；本脚本不会据此在本机构建，请先更新源码目录（cd $INSTALL_DIR && git pull）后重跑"
+  fi
+  die "安装中止：镜像未就绪，未启动任何容器"
+fi
+
+log "启动容器..."
+"${COMPOSE[@]}" up -d --no-build
 
 # 5. 输出访问信息
 HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"

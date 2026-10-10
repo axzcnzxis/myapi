@@ -3,8 +3,12 @@
 # 安装步骤见 README.md「快速开始（Docker）」：
 #   1. cp .env.example .env
 #   2. 在 .env 中填写 POSTGRES_PASSWORD / REDIS_PASSWORD / SESSION_SECRET（必填，无默认值）
-#   3. docker compose up -d --build
+#   3. docker compose up -d        # 直接拉取预构建镜像，不在本机构建
 #   4. 打开 http://<服务器地址>:32180 ，按初始化向导创建管理员账号
+#
+# 镜像：默认使用预构建镜像 ${MYAPI_IMAGE:-ghcr.io/axzcnzxis/myapi:latest}。
+#       如需从源码构建（依赖下载多、内存占用高），叠加构建文件：
+#         docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 #
 # 本文件不包含任何默认账号或密码：
 #   - 数据库 / Redis 凭据由 .env 提供（.gitignore 已忽略 .env，请勿提交）；
@@ -16,8 +20,9 @@
 
 services:
   myapi:
-    build: .            # 由本源码树构建（多阶段：Bun 前端 -> Go 后端 -> Debian 运行时）
-    image: myapi:latest # 本地镜像标签；本项目不发布预构建镜像
+    # 预构建镜像（发布在 GHCR，可用 MYAPI_IMAGE 覆盖）；本文件不含 build，
+    # docker compose up -d 只会拉取镜像。从源码构建见本文件头部说明。
+    image: ${MYAPI_IMAGE:-ghcr.io/axzcnzxis/myapi:latest}
     container_name: myapi
     restart: always
     command: --log-dir /app/logs

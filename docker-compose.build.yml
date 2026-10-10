@@ -1,0 +1,15 @@
+# 从源码构建镜像（叠加在 docker-compose.yml 之上）：
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# 用途：需要改动源码或不想使用预构建镜像时。
+# 注意：构建阶段要下载 npm / Go 模块依赖并编译前端与后端，内存占用较高，
+#       小内存机器（如 2G）可能被拖死；普通部署请直接用预构建镜像。
+#
+# 本文件把 myapi 服务改为本地构建，并单独打上 myapi:local 标签，
+# 避免覆盖 docker-compose.yml 中拉取的预构建镜像。
+
+services:
+  myapi:
+    build: .
+    image: myapi:local

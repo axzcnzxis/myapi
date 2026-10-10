@@ -56,9 +56,9 @@
 ```yaml
 version: '3'
 services:
-  new-api:
-    image: calciumion/new-api:latest
-    container_name: new-api
+  myapi:
+    image: ghcr.io/axzcnzxis/myapi:latest
+    container_name: myapi
     restart: always
     ports:
       - "32180:32180"
@@ -68,6 +68,8 @@ services:
       - SESSION_SECRET=your_session_secret_here  # 请修改为随机字符串
       - TZ=Asia/Shanghai
 ```
+
+> 本仓库的完整 Compose 配置（含 PostgreSQL / Redis 与凭据注入）见仓库根目录 [`docker-compose.yml`](../../docker-compose.yml)，也可以直接用一键脚本安装。
 
 1. 在终端中进入目录并启动：
 
@@ -126,10 +128,10 @@ volumes:
 
 ```bash
 # 拉取最新镜像
-docker pull calciumion/new-api:latest
+docker pull ghcr.io/axzcnzxis/myapi:latest
 
 # 重启容器
-docker-compose down && docker-compose up -d
+docker compose down && docker compose up -d
 ```
 
 ***

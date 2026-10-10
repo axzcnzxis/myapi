@@ -55,7 +55,7 @@
 | 子模块 | `.../new-api/relaykit` | `github.com/axzcnzxis/myapi/relaykit` |
 | 默认系统名 | `New API` | `myapi` |
 | 构建产物 / 容器入口 | `/new-api` | `/myapi` |
-| Docker 镜像 | `calciumion/new-api` | `myapi`（本地构建，见下） |
+| Docker 镜像 | `calciumion/new-api` | `ghcr.io/axzcnzxis/myapi`（预构建，也可从源码构建，见下） |
 | 数据库名（Compose 默认） | `new-api` | `myapi` |
 
 涉及文件：`go.mod`、`relaykit/go.mod`、全仓库 Go import、`Dockerfile`、`docker-compose.yml`、`common/constants.go`（`SystemName`）、`common/init.go`（`--help` 文案）、`main.go`（启动日志）、`web/index.html`、`web/src/lib/constants.ts`、`web/src/components/layout/components/system-brand.tsx`、`web/src/components/layout/components/footer.tsx`、`web/src/assets/logo.tsx`、`web/src/i18n/locales/*.json`。
@@ -172,15 +172,16 @@
 
 ### 方式一：一键安装（推荐）
 
-一行命令即可完成：获取源码 → 随机生成凭据写入 `.env` → 构建并启动 **myapi + PostgreSQL + Redis**。
+一行命令即可完成：获取源码 → 随机生成凭据写入 `.env` → 拉取预构建镜像并启动 **myapi + PostgreSQL + Redis**。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
 ```
 
 - 默认安装到 `./myapi`，默认端口 `32180`。
+- **安装过程不在本机构建**：直接拉取预构建镜像 `ghcr.io/axzcnzxis/myapi:latest`，因此对机器配置要求低（小内存机器也不会卡在构建阶段）。
 - 脚本随机生成 `POSTGRES_PASSWORD` / `REDIS_PASSWORD` / `SESSION_SECRET` 写入 `.env`（以 `umask 077` 创建），已存在的 `.env` 不会被覆盖。
-- 可用环境变量覆盖默认值：`MYAPI_DIR`（安装目录）、`MYAPI_PORT`（对外端口）、`MYAPI_REF`（分支/标签）、`MYAPI_REPO`（源码仓库），例如 `MYAPI_PORT=8080 bash install.sh`。
+- 可用环境变量覆盖默认值：`MYAPI_DIR`（安装目录）、`MYAPI_PORT`（对外端口）、`MYAPI_IMAGE`（镜像地址）、`MYAPI_REF`（分支/标签）、`MYAPI_REPO`（源码仓库），例如 `MYAPI_PORT=8080 bash install.sh`。
 
 想先审阅脚本再执行：
 
@@ -226,14 +227,21 @@ SESSION_SECRET=<openssl rand -hex 32 生成>
 - 缺少 `POSTGRES_PASSWORD` / `REDIS_PASSWORD` / `SESSION_SECRET` 时 `docker compose` 会直接报错退出，不会回退到任何内置默认值。
 - `POSTGRES_USER` / `POSTGRES_DB` 仅在数据卷首次初始化时生效；若复用已有的 `pg_data` 卷，必须与卷内账号保持一致。
 
-**3. 构建并启动**
+**3. 启动（拉取预构建镜像）**
 
 ```bash
-# 首次需要构建镜像（需能访问 Docker Hub、npm 与 Go 模块代理）
-docker compose up -d --build
+docker compose up -d        # 只拉取镜像，不在本机构建
 
 docker compose logs -f myapi
 ```
+
+需要从源码构建镜像（改动代码、或不想用预构建镜像）时叠加构建文件：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+> 构建阶段要下载前端/后端依赖并编译，内存占用较高，小内存机器（如 2G）容易被拖死，普通部署建议直接用预构建镜像。
 
 **4. 完成初始化向导**
 
@@ -243,17 +251,28 @@ docker compose logs -f myapi
 
 ```bash
 mkdir -p data
-docker build -t myapi:latest .
 
 docker run --name myapi -d --restart unless-stopped \
   -p 127.0.0.1:32180:32180 \
   -e TZ=Asia/Shanghai \
   -e SESSION_SECRET="$(openssl rand -hex 32)" \
   -v "$(pwd)/data:/data" \
-  myapi:latest
+  ghcr.io/axzcnzxis/myapi:latest
 ```
 
 `data` 目录用于持久化 SQLite 数据库；同样在首次访问 <http://localhost:32180> 时通过初始化向导创建管理员账号。
+
+需要从源码构建镜像时：`docker build -t myapi:local .`，再把上面的镜像名换成 `myapi:local`。
+
+### 更新版本
+
+```bash
+cd <安装目录>
+docker compose pull             # 拉取新镜像
+docker compose up -d --no-build # 用新镜像重建容器
+```
+
+数据保留在 `pg_data` 卷与 `./data`、`./logs` 目录中，`up -d` 只重建容器，不会动数据。
 
 ### 首次请求
 
@@ -282,6 +301,7 @@ curl --fail-with-body http://localhost:32180/v1/models \
 | `REDIS_PASSWORD` | **是** | Redis 密码，无默认值 |
 | `SESSION_SECRET` | **是** | 会话与敏感字段加密密钥，无默认值 |
 | `MYAPI_PORT` | 否 | 控制台对外端口，默认 `32180` |
+| `MYAPI_IMAGE` | 否 | myapi 镜像地址，默认 `ghcr.io/axzcnzxis/myapi:latest`（预构建镜像） |
 | `NODE_NAME` | 否 | 节点名，默认 `myapi-node-1` |
 | `TZ` | 否 | 时区，默认 `Asia/Shanghai` |
 
