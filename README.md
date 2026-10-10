@@ -180,8 +180,7 @@ curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | b
 
 - 默认安装到 `./myapi`，默认端口 `32180`。
 - 脚本随机生成 `POSTGRES_PASSWORD` / `REDIS_PASSWORD` / `SESSION_SECRET` 写入 `.env`（以 `umask 077` 创建），已存在的 `.env` 不会被覆盖。
-- **构建要求**：建议 **≥ 4 GB 内存（RAM + Swap）** 与 ≥ 8 GB 可用磁盘。内存不足时脚本会在构建前中止，并给出增加 Swap 的指引（确认风险后可用 `MYAPI_FORCE=1` 跳过检查）；镜像构建已限制并发度以压低内存峰值。
-- 可用环境变量覆盖默认值：`MYAPI_DIR`（安装目录）、`MYAPI_PORT`（对外端口）、`MYAPI_REF`（分支/标签）、`MYAPI_REPO`（源码仓库）、`MYAPI_BUILD_JOBS`（Go 编译并发度）、`MYAPI_MIN_MEM_MB` / `MYAPI_MIN_DISK_MB`（资源下限）、`MYAPI_FORCE=1`（跳过资源检查），例如 `MYAPI_PORT=8080 bash install.sh`。
+- 可用环境变量覆盖默认值：`MYAPI_DIR`（安装目录）、`MYAPI_PORT`（对外端口）、`MYAPI_REF`（分支/标签）、`MYAPI_REPO`（源码仓库），例如 `MYAPI_PORT=8080 bash install.sh`。
 
 想先审阅脚本再执行：
 
@@ -283,7 +282,6 @@ curl --fail-with-body http://localhost:32180/v1/models \
 | `REDIS_PASSWORD` | **是** | Redis 密码，无默认值 |
 | `SESSION_SECRET` | **是** | 会话与敏感字段加密密钥，无默认值 |
 | `MYAPI_PORT` | 否 | 控制台对外端口，默认 `32180` |
-| `MYAPI_BUILD_JOBS` | 否 | 构建时的 Go 编译并发度，默认 `2`；内存较小的机器保持默认即可 |
 | `NODE_NAME` | 否 | 节点名，默认 `myapi-node-1` |
 | `TZ` | 否 | 时区，默认 `Asia/Shanghai` |
 

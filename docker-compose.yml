@@ -16,11 +16,7 @@
 
 services:
   myapi:
-    build:
-      context: .
-      args:
-        # Go 编译并发度，用于限制构建内存峰值；内存较小的机器可调低（如 1）
-        GO_BUILD_JOBS: ${MYAPI_BUILD_JOBS:-2}
+    build: .            # 由本源码树构建（多阶段：Bun 前端 -> Go 后端 -> Debian 运行时）
     image: myapi:latest # 本地镜像标签；本项目不发布预构建镜像
     container_name: myapi
     restart: always
