@@ -179,7 +179,7 @@ curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | b
 ```
 
 - 默认安装到 `./myapi`，默认端口 `32180`。
-- **安装过程不在本机构建**：直接拉取预构建镜像 `ghcr.io/axzcnzxis/myapi:latest`，因此对机器配置要求低（小内存机器也不会卡在构建阶段）。镜像同时发布到 Docker Hub（`<DockerHub 账号>/myapi:latest`），可用 `MYAPI_IMAGE` 切换来源。
+- **安装过程不在本机构建**：直接拉取预构建镜像 `ghcr.io/axzcnzxis/myapi:latest`，因此对机器配置要求低（小内存机器也不会卡在构建阶段）。镜像同时发布到 Docker Hub（`aksgxc/myapi:latest`），可用 `MYAPI_IMAGE` 切换来源，例如 `MYAPI_IMAGE=aksgxc/myapi:latest`。
 - 脚本随机生成 `POSTGRES_PASSWORD` / `REDIS_PASSWORD` / `SESSION_SECRET` 写入 `.env`（以 `umask 077` 创建），已存在的 `.env` 不会被覆盖。
 - 可用环境变量覆盖默认值：`MYAPI_DIR`（安装目录）、`MYAPI_PORT`（对外端口）、`MYAPI_IMAGE`（镜像地址）、`MYAPI_REF`（分支/标签）、`MYAPI_REPO`（源码仓库），例如 `MYAPI_PORT=8080 bash install.sh`。
 
@@ -301,7 +301,7 @@ curl --fail-with-body http://localhost:32180/v1/models \
 | `REDIS_PASSWORD` | **是** | Redis 密码，无默认值 |
 | `SESSION_SECRET` | **是** | 会话与敏感字段加密密钥，无默认值 |
 | `MYAPI_PORT` | 否 | 控制台对外端口，默认 `32180` |
-| `MYAPI_IMAGE` | 否 | myapi 镜像地址，默认 `ghcr.io/axzcnzxis/myapi:latest`（预构建镜像） |
+| `MYAPI_IMAGE` | 否 | myapi 镜像地址，默认 `ghcr.io/axzcnzxis/myapi:latest`（预构建镜像）；Docker Hub 镜像为 `aksgxc/myapi:latest` |
 | `NODE_NAME` | 否 | 节点名，默认 `myapi-node-1` |
 | `TZ` | 否 | 时区，默认 `Asia/Shanghai` |
 
