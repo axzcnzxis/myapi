@@ -10,6 +10,9 @@
 #   DOCKERHUB_TOKEN     Docker Hub → Account Settings → Personal access tokens 生成的令牌
 # 未配置时本次只发布 GHCR，并在运行摘要中给出告警。
 #
+# 两个 registry 分别推送（只构建一次到本地，再分别 push）：任一 registry 权限异常
+# 不会连带阻断另一个，运行摘要会列出各目标的推送结果。
+#
 # GHCR 使用内置 GITHUB_TOKEN，无需配置，但要求 ghcr.io/axzcnzxis/myapi 这个包
 # 已关联到本仓库（Package settings → Connect repository）；包未关联时会报
 # permission_denied: write_package，此时改为配置 Secrets 里的 GHCR_TOKEN
@@ -46,14 +49,19 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tags="ghcr.io/axzcnzxis/myapi:latest"
+          ghcr_ref="ghcr.io/axzcnzxis/myapi:latest"
+          tags="$ghcr_ref"
+          dockerhub_ref=""
           if [ -n "${DOCKERHUB_USERNAME:-}" ] && [ -n "${DOCKERHUB_TOKEN:-}" ]; then
             echo "dockerhub=true" >> "$GITHUB_OUTPUT"
-            tags="${tags}"$'\n'"${DOCKERHUB_USERNAME}/myapi:latest"
+            dockerhub_ref="${DOCKERHUB_USERNAME}/myapi:latest"
+            tags="${tags}"$'\n'"${dockerhub_ref}"
           else
             echo "dockerhub=false" >> "$GITHUB_OUTPUT"
             echo "::warning::未配置 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN，本次只发布 GHCR 镜像"
           fi
+          echo "ghcr_ref=${ghcr_ref}" >> "$GITHUB_OUTPUT"
+          echo "dockerhub_ref=${dockerhub_ref}" >> "$GITHUB_OUTPUT"
           {
             echo "tags<<TAGS_EOF"
             echo "$tags"
@@ -81,24 +89,37 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & push
+      # 先构建到本地（load），再分别推送：某个 registry 权限异常时不会连带阻断另一个。
+      - name: Build image
+        id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           platforms: linux/amd64
-          push: true
+          load: true
           tags: ${{ steps.targets.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Push to GHCR
+        id: ghcr
+        if: steps.build.outcome == 'success'
+        run: docker push "${{ steps.targets.outputs.ghcr_ref }}"
+
+      - name: Push to Docker Hub
+        id: dockerhub
+        if: steps.build.outcome == 'success' && steps.targets.outputs.dockerhub == 'true'
+        run: docker push "${{ steps.targets.outputs.dockerhub_ref }}"
 
       - name: Summary
         if: always()
         run: |
           {
-            echo "### 目标镜像"
-            echo '```'
-            echo "${{ steps.targets.outputs.tags }}"
-            echo '```'
-            echo "- Docker Hub：\`${{ steps.targets.outputs.dockerhub }}\`"
+            echo "### 镜像发布结果"
+            echo "| 目标 | 镜像 | push |"
+            echo "| --- | --- | --- |"
+            echo "| GHCR | \`${{ steps.targets.outputs.ghcr_ref }}\` | ${{ steps.ghcr.outcome || 'skipped' }} |"
+            echo "| Docker Hub | \`${{ steps.targets.outputs.dockerhub_ref || '未配置' }}\` | ${{ steps.dockerhub.outcome || 'skipped' }} |"
+            echo ""
             echo "- 提交：\`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
