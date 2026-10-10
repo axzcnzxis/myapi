@@ -23,6 +23,12 @@ ARG TARGETARCH
 ENV GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64}
 ENV GOEXPERIMENT=greenteagc
 
+# Go 编译并发度上限。BuildKit 默认按 CPU 核数并行编译，在小内存机器上
+# （如 4C4G、无 Swap）内存峰值会超过物理内存，导致宿主机卡死 / OOM。
+# 可用 `--build-arg GO_BUILD_JOBS=N` 覆盖（Compose 中对应 MYAPI_BUILD_JOBS）。
+ARG GO_BUILD_JOBS=2
+ENV GOFLAGS="-p=${GO_BUILD_JOBS}" GOMAXPROCS=${GO_BUILD_JOBS}
+
 WORKDIR /build
 
 ADD go.mod go.sum ./
@@ -31,8 +37,14 @@ ADD go.mod go.sum ./
 ADD relaykit/go.mod ./relaykit/go.mod
 RUN go mod download
 
-COPY . .
+# 串行化栅栏：显式依赖前端构建阶段（builder）的产物。
+# BuildKit 会并行构建互不依赖的阶段，此前前端 rsbuild 与后端 COPY/编译同时进行，
+# 在内存较小的机器上叠加出超过物理内存的峰值，导致宿主机卡死。提前引用 dist 后，
+# 后续所有步骤都要等前端构建完成；go mod download 位于栅栏之前，缓存仍可独立复用。
+# 注意：.dockerignore 已排除 /web/dist，因此下面的 `COPY . .` 不会覆盖这里拷入的产物。
 COPY --from=builder /build/web/dist ./web/dist
+
+COPY . .
 RUN go build -ldflags "-s -w -X 'github.com/axzcnzxis/myapi/common.Version=$(cat VERSION)'" -o myapi
 
 FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
