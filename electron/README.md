@@ -37,7 +37,7 @@ npm run dev-app
 ```
 
 This will:
-- Use the Go backend on port 3000
+- Use the Go backend on port 32180
 - Use the Rsbuild frontend development server on port 5173
 - Open an Electron window with DevTools enabled
 - Create a system tray icon (menu bar on macOS)
@@ -68,9 +68,9 @@ npm run build:linux  # Creates .AppImage and .deb
 ## Configuration
 
 ### Port
-Default port is 3000. To change, edit `main.js`:
+Default port is 32180. To change, edit `main.js`:
 ```javascript
-const PORT = 3000; // Change to desired port
+const PORT = 32180; // Change to desired port
 ```
 
 ### Database Location

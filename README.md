@@ -168,11 +168,40 @@
 
 ## 🚀 快速开始（Docker）
 
-> 本仓库**不含任何默认账号或密码**：数据库与 Redis 凭据在安装时由 `.env` 提供，控制台管理员账号在首次访问时通过**初始化向导**创建。
+> 本仓库**不含任何默认账号或密码**：数据库与 Redis 凭据由安装脚本随机生成（或手动写入 `.env`），控制台管理员账号在首次访问时通过**初始化向导**创建。
 
-### 方式一：Docker Compose（推荐）
+### 方式一：一键安装（推荐）
 
-仓库自带的 [`docker-compose.yml`](./docker-compose.yml) 会启动 **myapi + PostgreSQL + Redis**。
+一行命令即可完成：获取源码 → 随机生成凭据写入 `.env` → 构建并启动 **myapi + PostgreSQL + Redis**。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
+```
+
+- 默认安装到 `./myapi`，默认端口 `32180`。
+- 脚本随机生成 `POSTGRES_PASSWORD` / `REDIS_PASSWORD` / `SESSION_SECRET` 写入 `.env`（以 `umask 077` 创建），已存在的 `.env` 不会被覆盖。
+- 可用环境变量覆盖默认值：`MYAPI_DIR`（安装目录）、`MYAPI_PORT`（对外端口）、`MYAPI_REF`（分支/标签）、`MYAPI_REPO`（源码仓库），例如 `MYAPI_PORT=8080 bash install.sh`。
+
+想先审阅脚本再执行：
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh
+less install.sh && bash install.sh
+```
+
+安装完成后打开 `http://<服务器地址>:32180`，页面会自动进入初始化向导：
+
+1. 设置**管理员用户名与密码**（即控制台 root 账号，密码由你在此处设定）；
+2. 按需选择「自用模式」/「演示站点」；
+3. 提交后初始化完成，使用该账号登录控制台。
+
+初始化状态可通过 `GET /api/setup` 查询（`data.status` 表示是否已完成初始化）。
+
+> ⚠️ 生产环境建议：仅通过 HTTPS 反向代理暴露（注意流式与 WebSocket 升级）、按需收紧 `MYAPI_PORT` 的绑定范围，并定期备份 `pg_data` 卷与 `./data` 目录。
+
+### 方式二：手动 Docker Compose
+
+不使用脚本时，仓库自带的 [`docker-compose.yml`](./docker-compose.yml) 也可手动部署。
 
 **1. 获取源码并准备配置**
 
@@ -208,42 +237,34 @@ docker compose logs -f myapi
 
 **4. 完成初始化向导**
 
-打开 `http://<服务器地址>:3000`，页面会自动进入初始化向导：
+打开 `http://<服务器地址>:32180`，页面会自动进入初始化向导（步骤同「方式一」）。
 
-1. 设置**管理员用户名与密码**（即控制台 root 账号，密码由你在此处设定）；
-2. 按需选择「自用模式」/「演示站点」；
-3. 提交后初始化完成，使用该账号登录控制台。
-
-初始化状态可通过 `GET /api/setup` 查询（`data.status` 表示是否已完成初始化）。
-
-> ⚠️ 生产环境建议：使用强密码、仅通过 HTTPS 反向代理暴露（注意流式与 WebSocket 升级）、按需收紧 `MYAPI_PORT` 的绑定范围，并定期备份 `pg_data` 卷与 `./data` 目录。
-
-### 方式二：单容器（SQLite）
+### 方式三：单容器（SQLite）
 
 ```bash
 mkdir -p data
 docker build -t myapi:latest .
 
 docker run --name myapi -d --restart unless-stopped \
-  -p 127.0.0.1:3000:3000 \
+  -p 127.0.0.1:32180:32180 \
   -e TZ=Asia/Shanghai \
   -e SESSION_SECRET="$(openssl rand -hex 32)" \
   -v "$(pwd)/data:/data" \
   myapi:latest
 ```
 
-`data` 目录用于持久化 SQLite 数据库；同样在首次访问 <http://localhost:3000> 时通过初始化向导创建管理员账号。
+`data` 目录用于持久化 SQLite 数据库；同样在首次访问 <http://localhost:32180> 时通过初始化向导创建管理员账号。
 
 ### 首次请求
 
 1. 在控制台添加渠道（上游 API Key、可用模型、分组），并执行渠道测试。
 2. 配置模型价格，确保用户有额度或有效订阅。
 3. 在控制台创建 API Key（分组与模型需与渠道匹配）。
-4. 把客户端 Base URL 设为 `http://localhost:3000/v1`。
+4. 把客户端 Base URL 设为 `http://localhost:32180/v1`。
 
 ```bash
 export MYAPI_KEY=sk-xxxxxxxx
-curl --fail-with-body http://localhost:3000/v1/models \
+curl --fail-with-body http://localhost:32180/v1/models \
   -H "Authorization: Bearer ${MYAPI_KEY}"
 ```
 
@@ -260,7 +281,7 @@ curl --fail-with-body http://localhost:3000/v1/models \
 | `POSTGRES_DB` | 否 | 数据库名，默认 `myapi` |
 | `REDIS_PASSWORD` | **是** | Redis 密码，无默认值 |
 | `SESSION_SECRET` | **是** | 会话与敏感字段加密密钥，无默认值 |
-| `MYAPI_PORT` | 否 | 控制台对外端口，默认 `3000` |
+| `MYAPI_PORT` | 否 | 控制台对外端口，默认 `32180` |
 | `NODE_NAME` | 否 | 节点名，默认 `myapi-node-1` |
 | `TZ` | 否 | 时区，默认 `Asia/Shanghai` |
 

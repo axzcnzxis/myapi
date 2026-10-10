@@ -36,14 +36,10 @@
 ## 快速開始
 
 ```bash
-git clone https://github.com/axzcnzxis/myapi.git
-cd myapi
-
-docker compose build      # 由本原始碼樹建置 myapi 映像
-docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
 ```
 
-開啟 <http://localhost:3000> 完成初始化設定。對外提供服務前，請先修改 PostgreSQL／Redis 的預設密碼，並設定持久化的 `SESSION_SECRET`。單一容器（SQLite）用法與完整設定變數見 [`README.md`](./README.md)。
+開啟 <http://localhost:32180> 完成初始化設定。腳本會隨機產生 PostgreSQL／Redis 密碼與持久化的 `SESSION_SECRET` 並寫入 `.env`；手動 Compose 步驟、單一容器（SQLite）用法與完整設定變數見 [`README.md`](./README.md)。
 
 ## 授權與致謝
 

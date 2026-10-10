@@ -36,14 +36,10 @@
 ## Démarrage rapide
 
 ```bash
-git clone https://github.com/axzcnzxis/myapi.git
-cd myapi
-
-docker compose build      # construit l'image myapi depuis cette arborescence
-docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
 ```
 
-Ouvrez <http://localhost:3000> et terminez l'assistant d'initialisation. Avant toute exposition publique, changez les mots de passe PostgreSQL / Redis par défaut et définissez un `SESSION_SECRET` persistant. L'usage en conteneur unique (SQLite) et toutes les variables de configuration sont décrits dans [`README.md`](./README.md).
+Ouvrez <http://localhost:32180> et terminez l'assistant d'initialisation. Le script génère des mots de passe PostgreSQL / Redis aléatoires et un `SESSION_SECRET` persistant dans `.env` ; les étapes Compose manuelles, l'usage en conteneur unique (SQLite) et toutes les variables de configuration sont décrits dans [`README.md`](./README.md).
 
 ## Licence et attribution
 

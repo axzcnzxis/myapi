@@ -36,14 +36,10 @@
 ## Quick start
 
 ```bash
-git clone https://github.com/axzcnzxis/myapi.git
-cd myapi
-
-docker compose build      # build the myapi image from this source tree
-docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
 ```
 
-Then open <http://localhost:3000> and complete the setup wizard. Change the default PostgreSQL / Redis passwords and set a persistent `SESSION_SECRET` before exposing it publicly. See [`README.md`](./README.md) for single-container (SQLite) usage and all configuration variables.
+Then open <http://localhost:32180> and complete the setup wizard. The script generates random PostgreSQL / Redis passwords and a persistent `SESSION_SECRET` into `.env`; see [`README.md`](./README.md) for the manual Compose steps, single-container (SQLite) usage and all configuration variables.
 
 ## License and attribution
 

@@ -36,14 +36,10 @@
 ## クイックスタート
 
 ```bash
-git clone https://github.com/axzcnzxis/myapi.git
-cd myapi
-
-docker compose build      # このソースツリーから myapi イメージをビルド
-docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
 ```
 
-<http://localhost:3000> を開き、初期設定を完了します。外部公開の前に PostgreSQL / Redis の既定パスワードを変更し、永続的な `SESSION_SECRET` を設定してください。単一コンテナ（SQLite）での利用方法と全設定変数は [`README.md`](./README.md) を参照してください。
+<http://localhost:32180> を開き、初期設定を完了します。スクリプトは PostgreSQL / Redis のパスワードと永続的な `SESSION_SECRET` をランダム生成して `.env` に書き込みます。手動 Compose 手順、単一コンテナ（SQLite）での利用方法と全設定変数は [`README.md`](./README.md) を参照してください。
 
 ## ライセンスと謝辞
 
