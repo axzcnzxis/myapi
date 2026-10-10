@@ -134,6 +134,16 @@ docker pull ghcr.io/axzcnzxis/myapi:latest
 docker compose down && docker compose up -d
 ```
 
+也可以直接重跑一键安装脚本，它会复用已有目录与 `.env`，只拉取新镜像并重启：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
+```
+
+> 若目录里的 `docker-compose.yml` 还是含 `build:` 的旧版配置（`docker compose pull` 会报
+> `pull access denied for myapi`），脚本会自动备份原文件为 `docker-compose.yml.bak-<时间戳>`
+> 并替换为最新的「只拉取预构建镜像」配置，不需要手动 `git pull`。
+
 ***
 
 ## 相关链接

@@ -16,11 +16,20 @@
 #                 同样仅在首次生成 .env 时写入，之后以 .env 里的值为准
 #   MYAPI_REF     分支或标签，默认 main
 #   MYAPI_REPO    源码仓库，默认 https://github.com/axzcnzxis/myapi.git
+#   MYAPI_RAW_BASE         复用旧目录时获取最新 compose 文件的地址前缀，
+#                          默认 https://raw.githubusercontent.com/axzcnzxis/myapi/<REF>
 #   MYAPI_TARBALL_URL      未安装 git 时的源码压缩包地址（默认按分支下载）
 #   MYAPI_TARBALL_URL_TAG  未安装 git 时的标签压缩包地址（默认按标签下载）
 #
 # 本脚本不写入任何内置账号或密码：凭据在安装时随机生成，管理员账号在
-# 首次访问时通过初始化向导创建。重复执行是安全的：已存在的 .env 不会被覆盖。
+# 首次访问时通过初始化向导创建。重复执行是安全的：已存在的 .env 不会被覆盖，
+# 自定义过的 docker-compose.yml 也不会被覆盖（仅当它含 build: 或指向本地构建
+# 标签、会绕过预构建镜像时才备份并替换，见下）。
+#
+# 复用已有目录时，若其中的 docker-compose.yml 还是旧版（含 build:，或 image
+# 指向 myapi:latest 这类只在本地构建出来的标签），脚本会先把原文件备份为
+# docker-compose.yml.bak-<时间戳>，再替换为仓库中的最新“只拉取预构建镜像”配置，
+# 避免在本机构建、也避免去拉一个不存在的镜像。
 set -euo pipefail
 
 PORT="${MYAPI_PORT:-32180}"
@@ -28,6 +37,7 @@ IMAGE="${MYAPI_IMAGE:-ghcr.io/axzcnzxis/myapi:latest}"
 INSTALL_DIR="${MYAPI_DIR:-$PWD/myapi}"
 REPO_URL="${MYAPI_REPO:-https://github.com/axzcnzxis/myapi.git}"
 REF="${MYAPI_REF:-main}"
+RAW_BASE="${MYAPI_RAW_BASE:-https://raw.githubusercontent.com/axzcnzxis/myapi/${REF}}"
 TARBALL_URL="${MYAPI_TARBALL_URL:-https://github.com/axzcnzxis/myapi/archive/refs/heads/${REF}.tar.gz}"
 TARBALL_URL_TAG="${MYAPI_TARBALL_URL_TAG:-https://github.com/axzcnzxis/myapi/archive/refs/tags/${REF}.tar.gz}"
 
@@ -41,6 +51,47 @@ rand_hex() {
   else
     head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
   fi
+}
+
+# 复用已有源码目录时，本地的 docker-compose.yml 可能还是旧版：含 build:（安装时会在
+# 本机构建），或 image 指向 myapi:latest 这类只在本地构建出来的标签。这类配置会让下面
+# 的 `docker compose pull` 去拉一个不存在于任何 registry 的镜像而失败。
+#
+# 检测到这种旧配置时：备份原文件 -> 换成仓库中的最新“只拉取预构建镜像”配置。
+# 其它情况（不含 build: 的自定义配置）一律不动，避免覆盖用户自己的改动。
+# 替换失败不影响流程：后续 pull 失败时会给出对应的提示。
+repair_legacy_compose() {
+  local compose="$INSTALL_DIR/docker-compose.yml"
+
+  grep -Eq '^[[:space:]]*(build:|image:[[:space:]]*myapi:)' "$compose" || return 0
+
+  warn "检测到旧版 docker-compose.yml（含 build: 或指向本地构建标签），它会在本机构建而非拉取预构建镜像；正在替换为最新配置"
+  if ! command -v curl >/dev/null 2>&1; then
+    warn "未检测到 curl，无法获取最新 docker-compose.yml，请手动更新 $INSTALL_DIR 后重跑"
+    return 0
+  fi
+
+  local tmp backup
+  tmp="$(mktemp)"
+  if ! curl -fsSL "$RAW_BASE/docker-compose.yml" -o "$tmp"; then
+    rm -f "$tmp"
+    warn "获取 $RAW_BASE/docker-compose.yml 失败，请手动更新 $INSTALL_DIR 后重跑"
+    return 0
+  fi
+  # 校验下载结果，避免把无关内容写进安装目录
+  if [ ! -s "$tmp" ] ||
+     grep -Eq '^[[:space:]]*build:' "$tmp" ||
+     ! grep -Eq '^[[:space:]]*container_name:[[:space:]]*myapi[[:space:]]*$' "$tmp"; then
+    rm -f "$tmp"
+    warn "下载到的 docker-compose.yml 校验未通过（不是预期的 myapi 配置），已放弃替换"
+    return 0
+  fi
+
+  backup="$compose.bak-$(date +%Y%m%d-%H%M%S)"
+  cp -p "$compose" "$backup"
+  cat "$tmp" > "$compose"
+  rm -f "$tmp"
+  log "已更新 docker-compose.yml（原文件备份为 $(basename "$backup")）"
 }
 
 # 1. 检查依赖
@@ -59,6 +110,7 @@ docker info >/dev/null 2>&1 || die "无法连接 Docker 守护进程，请确认
 # 2. 获取源码
 if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
   log "复用已有源码目录：$INSTALL_DIR"
+  repair_legacy_compose
 else
   log "获取源码到：$INSTALL_DIR"
   # 目录存在但没有 docker-compose.yml，通常是上次下载/克隆中断的残留：
@@ -140,7 +192,7 @@ log "拉取镜像：$IMAGE"
 if ! "${COMPOSE[@]}" pull; then
   warn "镜像拉取失败：请检查网络与镜像地址（当前为 $IMAGE，可用 MYAPI_IMAGE=<镜像地址> 指定其它来源）"
   if grep -Eq '^[[:space:]]*build:' docker-compose.yml; then
-    warn "当前目录的 docker-compose.yml 是含 build: 的旧版配置；本脚本不会据此在本机构建，请先更新源码目录（cd $INSTALL_DIR && git pull）后重跑"
+    warn "当前目录的 docker-compose.yml 仍是含 build: 的旧版配置，且自动替换未成功；本脚本不会据此在本机构建，请先更新源码目录（cd $INSTALL_DIR && git pull）后重跑"
   fi
   die "安装中止：镜像未就绪，未启动任何容器"
 fi
