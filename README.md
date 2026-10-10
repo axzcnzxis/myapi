@@ -179,7 +179,7 @@ curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | b
 ```
 
 - 默认安装到 `./myapi`，默认端口 `32180`。
-- **安装过程不在本机构建**：直接拉取预构建镜像 `ghcr.io/axzcnzxis/myapi:latest`，因此对机器配置要求低（小内存机器也不会卡在构建阶段）。
+- **安装过程不在本机构建**：直接拉取预构建镜像 `ghcr.io/axzcnzxis/myapi:latest`，因此对机器配置要求低（小内存机器也不会卡在构建阶段）。镜像同时发布到 Docker Hub（`<DockerHub 账号>/myapi:latest`），可用 `MYAPI_IMAGE` 切换来源。
 - 脚本随机生成 `POSTGRES_PASSWORD` / `REDIS_PASSWORD` / `SESSION_SECRET` 写入 `.env`（以 `umask 077` 创建），已存在的 `.env` 不会被覆盖。
 - 可用环境变量覆盖默认值：`MYAPI_DIR`（安装目录）、`MYAPI_PORT`（对外端口）、`MYAPI_IMAGE`（镜像地址）、`MYAPI_REF`（分支/标签）、`MYAPI_REPO`（源码仓库），例如 `MYAPI_PORT=8080 bash install.sh`。
 

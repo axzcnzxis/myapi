@@ -1,0 +1,96 @@
+# 发布预构建镜像（供 install.sh / docker-compose.yml 直接拉取）
+#
+# 触发：推送到 main、或手动 workflow_dispatch。
+# 产物（linux/amd64）：
+#   ghcr.io/axzcnzxis/myapi:latest
+#   <DOCKERHUB_USERNAME>/myapi:latest
+#
+# Docker Hub 需要仓库 Secrets（Settings → Secrets and variables → Actions）：
+#   DOCKERHUB_USERNAME  Docker Hub 账号名（同时作为镜像命名空间）
+#   DOCKERHUB_TOKEN     Docker Hub → Account Settings → Personal access tokens 生成的令牌
+# 未配置时本次只发布 GHCR，并在运行摘要中给出告警。
+#
+# GHCR 使用内置 GITHUB_TOKEN，无需任何配置；若包被设为私有，匿名拉取会失败，
+# 需在包设置里把可见性改为 Public。
+name: Publish myapi image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-myapi-image
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & push (linux/amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Resolve target tags
+        id: targets
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tags="ghcr.io/axzcnzxis/myapi:latest"
+          if [ -n "${DOCKERHUB_USERNAME:-}" ] && [ -n "${DOCKERHUB_TOKEN:-}" ]; then
+            echo "dockerhub=true" >> "$GITHUB_OUTPUT"
+            tags="${tags}"$'\n'"${DOCKERHUB_USERNAME}/myapi:latest"
+          else
+            echo "dockerhub=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::未配置 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN，本次只发布 GHCR 镜像"
+          fi
+          {
+            echo "tags<<TAGS_EOF"
+            echo "$tags"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$tags"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: steps.targets.outputs.dockerhub == 'true'
+        uses: docker/login-action@c99871dec2022cc055c062a10cc1a1310835ceb4 # v4.3.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.targets.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "### 已发布镜像"
+            echo '```'
+            echo "${{ steps.targets.outputs.tags }}"
+            echo '```'
+            echo "提交：\`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
