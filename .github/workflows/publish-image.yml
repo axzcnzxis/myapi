@@ -103,12 +103,12 @@ jobs:
 
       - name: Push to GHCR
         id: ghcr
-        if: steps.build.outcome == 'success'
+        if: always() && steps.build.outcome == 'success'
         run: docker push "${{ steps.targets.outputs.ghcr_ref }}"
 
       - name: Push to Docker Hub
         id: dockerhub
-        if: steps.build.outcome == 'success' && steps.targets.outputs.dockerhub == 'true'
+        if: always() && steps.build.outcome == 'success' && steps.targets.outputs.dockerhub == 'true'
         run: docker push "${{ steps.targets.outputs.dockerhub_ref }}"
 
       - name: Summary
