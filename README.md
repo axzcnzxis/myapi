@@ -131,17 +131,39 @@
 - 新路由：`GET /api/token/key-support`；`middleware/auth.go` 对 auto 令牌做请求期分组收缩；`service/billing_session.go` 钱包路径执行 `CheckWalletAllowed`。
 - 前端：`web/src/features/system-settings/billing/key-support-section.tsx`（新增）与令牌页相关组件。
 
-### 9. 其它修复与调整
+### 9. 界面视觉改版（新增）
+
+公共界面与后台共用的一套基础主题令牌被重做，统一为「近白画布 + 深蓝墨色 + 单一信号蓝」，替换上游的默认配色与字体。
+
+- **配色**（`web/src/styles/theme.css` 的 `:root` / `.dark`）：亮色为近白画布 `#fcfcfc`、正文墨色 `#14141e`、实心 CTA 深蓝 `#0f1f3d`；新增 `--signal` / `--color-signal`（`#145aff`），**只用于焦点环、描边与标签**，不作实心按钮填充；状态色统一为成功 `#16ca2e` / 警告 `#ffa64d` / 危险 `#f26052` / 信息 `#0099ff`。深色为反相的深蓝画布 `#0b0f1a`，信号蓝提亮为 `#4d7dff`。
+- **圆角与字体**：圆角基准 `--radius` 由 `1rem` 调整为 `0.75rem`；新增 `--font-mono`，`--font-sans` 首选族改为 Inter，并新增依赖 `@fontsource-variable/inter`、`@fontsource-variable/roboto-mono`，在 `web/src/styles/index.css` 全局引入（字体本地自托管，不请求外部 CDN）。
+- **首页与 CTA**：徽章与背景光晕改用信号蓝，标题渐变由蓝→紫改为 `primary → signal → info`（`web/src/features/home/components/sections/hero.tsx`、`cta.tsx`）。
+- **公共顶栏**：未滚动时导航高度由 64px 调整为 72px（`web/src/components/layout/components/public-header.tsx`）。
+- **内容宽度**：`max-w-container` 由 1280px 调整为 1200px（`web/src/styles/index.css`）。
+
+> 仅外观改动：不新增路由、不改接口、不动数据。`web/src/styles/theme-presets.css` 中的可选配色预设与用户本地主题偏好不受影响——未选择预设时落到上述基础令牌。
+
+### 10. 站内文档页 `/docs`（新增）
+
+控制台的「文档」入口不再跳转 GitHub，而是在站内直接渲染仓库的 README。
+
+- 新增公开前端路由 `/docs`（`web/src/routes/docs/index.tsx`）与页面 `web/src/features/docs/`（`index.tsx` / `api.ts` / `source.ts`）。
+- 文档来源由 `docs_link` 设置解析：指向 GitHub 的 `blob` 或 `raw` markdown 地址时按该仓库渲染，否则回退到本仓库 `main` 分支的 `README.md`（`source.ts`）。
+- README 内的相对图片改写到 raw 主机、相对链接指向 `blob` 目录，避免在控制台域名下 404（`resolveRepoImages`）。
+- 顶部导航与首页 Docs 按钮统一指向站内 `/docs`（`web/src/hooks/use-top-nav-links.ts`、`hero.tsx`），忽略 `docs_link` 中的外部地址。
+- 「拉取更新」按钮仅对 root 管理员（`role >= 100`）可见，以 `no-store` 强制重新拉取（`api.ts`，15s 超时）。
+
+### 11. 其它修复与调整
 
 | 项 | 文件 | 说明 |
 | --- | --- | --- |
 | Playground `/pg` 路径别名 | `relaykit/dto/channel_settings.go` | 修复：声明为 `/v1` 的高级自定义路由不再错误拒绝 `/pg` 请求 |
 | 数据库时间读取 | `model/db_time.go` | 新增事务句柄版本 `GetDBTimestampTx`，避免单连接池 / 事务内二次取连接死锁 |
 | 富文本自动识别 HTML | `web/src/components/rich-content.tsx`、`web/src/components/rich-content-utils.ts`（新增） | 内容渲染自动判定 Markdown / HTML（`mode: 'auto'` 为默认） |
-| 文档链接 | `setting/operation_setting/general_setting.go`、`web/src/features/home/components/sections/hero.tsx`、`web/src/components/layout/components/footer.tsx` | 默认 `DocsLink` 与页脚 / 首页文档入口指向本仓库 README |
+| 文档链接 | `setting/operation_setting/general_setting.go`、`web/src/components/layout/components/footer.tsx` | `DocsLink` 默认指向本仓库 README，并作为站内 `/docs` 页的数据源（见「站内文档页」）；页脚文档链接指向 GitHub 上的本 README |
 | 测试 | `model/*_test.go`、`controller/subscription_upgrade_group_test.go`、`service/group_usable_groups_test.go`、`relaykit/dto/playground_path_alias_test.go`、`web/src/components/rich-content-utils.test.ts` 等 | 覆盖上述新增与修改行为 |
 
-### 10. 兼容性影响汇总
+### 12. 兼容性影响汇总
 
 **数据库**
 
@@ -159,6 +181,10 @@
 **配置默认值**
 
 - `SystemName` 默认 `myapi`；`DocsLink` 默认指向本仓库 README；新增 `key_support_setting.*`（默认关闭）。
+
+**界面**
+
+- 基础主题令牌（配色、圆角）与界面字体改变，与上游外观不同；新增前端路由 `/docs`（站内渲染 README）。两项均不涉及后端接口与数据结构。
 
 **部署**
 
@@ -328,7 +354,7 @@ curl --fail-with-body http://localhost:32180/v1/models \
 
 ## 🛠 开发
 
-后端 Go + Gin；前端 React 19 + TypeScript + Rsbuild + TanStack + Tailwind CSS 4（使用 Bun）。
+后端 Go + Gin；前端 React 19 + TypeScript + Rsbuild + TanStack + Tailwind CSS 4（使用 Bun）；界面字体 Inter / Roboto Mono，经 `@fontsource-variable/*` 本地自托管。
 
 ```bash
 # 仓库根目录
@@ -367,7 +393,7 @@ bun run dev -- --port 5173
 - [`docs/`](./docs/) 目录下的补充文档
 - [`relaykit/README.md`](./relaykit/README.md)、[`web/AGENTS.md`](./web/AGENTS.md)、[`electron/README.md`](./electron/README.md)
 
-控制台内的「文档」入口（`DocsLink`）与页脚链接默认指向本仓库 README。
+控制台内的「文档」入口渲染站内 `/docs` 页，内容即本 README（数据源由 `DocsLink` 设置决定，见「与原版差异 · 站内文档页」）；页脚文档链接指向 GitHub 上的本 README。
 
 ---
 
