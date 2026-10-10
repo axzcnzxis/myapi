@@ -54,8 +54,6 @@ export function getUpdateErrorMessage(
   t: TFunction
 ): string {
   switch (code) {
-    case 'rate-limit':
-      return t('GitHub rate limit reached. Try again later.')
     case 'timeout':
       return t('Update check timed out. Try again.')
     case 'payload':

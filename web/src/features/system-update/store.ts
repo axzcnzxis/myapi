@@ -31,7 +31,7 @@ const updateSnapshotSchema = z
     release: systemReleaseSchema.nullable(),
     lastCheckedAt: z.number().finite().nonnegative(),
     lastAttemptAt: z.number().finite().nonnegative(),
-    error: z.enum(['network', 'rate-limit', 'timeout', 'payload']).nullable(),
+    error: z.enum(['network', 'timeout', 'payload']).nullable(),
   })
   .refine(
     (snapshot) =>

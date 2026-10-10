@@ -342,11 +342,11 @@ describe('administrator update entry', () => {
       lastAttemptAt: oldCheck,
       error: null,
     })
-    fetchMock.mockImplementation(async () => new Response('', { status: 429 }))
+    fetchMock.mockImplementation(async () => new Response('', { status: 500 }))
     const toastError = vi.spyOn(toast, 'error')
     render(<SystemUpdateAction />, { wrapper: Wrapper })
     await waitFor(() =>
-      expect(useSystemUpdateStore.getState().snapshot?.error).toBe('rate-limit')
+      expect(useSystemUpdateStore.getState().snapshot?.error).toBe('network')
     )
     expect(toastError).not.toHaveBeenCalled()
     await user.click(
@@ -363,7 +363,7 @@ describe('administrator update entry', () => {
     await user.click(screen.getByRole('button', { name: 'Check again' }))
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))
     expect(
-      screen.getByText('GitHub rate limit reached. Try again later.')
+      screen.getByText('Failed to check for updates')
     ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
@@ -413,7 +413,7 @@ describe('version label presentation', () => {
 
   test('retains the version after a failed check and exposes the error in its tooltip and details', async () => {
     const user = userEvent.setup()
-    fetchMock.mockResolvedValue(new Response('', { status: 429 }))
+    fetchMock.mockResolvedValue(new Response('', { status: 500 }))
     render(<SystemUpdateAction presentation='version' />, { wrapper: Wrapper })
     const trigger = await screen.findByRole('button', {
       name: /System updates, current version: v1\.0\.0-rc\.35.*Failed to check for updates/s,
@@ -425,7 +425,7 @@ describe('version label presentation', () => {
     )
     await user.click(trigger)
     expect(
-      screen.getByText('GitHub rate limit reached. Try again later.')
+      screen.getByText('Failed to check for updates')
     ).toBeInTheDocument()
   })
 
@@ -510,10 +510,10 @@ describe('version notification preferences', () => {
     await act(async () => hook.result.current.checkNow())
     expect(hook.result.current.isIgnored).toBe(true)
     expect(hook.result.current.shouldNotify).toBe(false)
-    fetchMock.mockImplementation(async () => new Response('', { status: 429 }))
+    fetchMock.mockImplementation(async () => new Response('', { status: 500 }))
     await act(async () => hook.result.current.checkNow())
     await waitFor(() =>
-      expect(hook.result.current.snapshot?.error).toBe('rate-limit')
+      expect(hook.result.current.snapshot?.error).toBe('network')
     )
     expect(hook.result.current.release?.tag_name).toBe(release.tag_name)
     expect(hook.result.current.isIgnored).toBe(true)
@@ -795,7 +795,6 @@ describe('update cache and scheduling', () => {
   })
 
   test.each([
-    [403, '[]', 'rate-limit'],
     [500, '[]', 'network'],
     [200, '{}', 'payload'],
     [200, '[{"tag_name":42}]', 'payload'],
@@ -806,5 +805,54 @@ describe('update cache and scheduling', () => {
     await waitFor(() => expect(hook.result.current.snapshot?.error).toBe(error))
     expect(hook.result.current.hasUpdate).toBe(false)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('throttled release API', () => {
+  test.each([403, 429])(
+    'falls back to the raw version file when the release API returns %s',
+    async (status) => {
+      fetchMock.mockImplementation(async (input) =>
+        String(input).includes('api.github.com')
+          ? new Response('', { status })
+          : new Response('v1.0.0-rc.37')
+      )
+      const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+      await waitFor(() =>
+        expect(hook.result.current.release?.tag_name).toBe('v1.0.0-rc.37')
+      )
+      expect(hook.result.current.snapshot?.error).toBeNull()
+      expect(hook.result.current.hasUpdate).toBe(true)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(String(fetchMock.mock.calls[1][0])).toBe(
+        'https://raw.githubusercontent.com/axzcnzxis/myapi/main/VERSION'
+      )
+    }
+  )
+
+  test('reports no release when the version file has no comparable version', async () => {
+    fetchMock.mockImplementation(async (input) =>
+      String(input).includes('api.github.com')
+        ? new Response('', { status: 403 })
+        : new Response('<html>not found</html>')
+    )
+    const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+    await waitFor(() =>
+      expect(
+        useSystemUpdateStore.getState().snapshot?.lastCheckedAt
+      ).toBeGreaterThan(0)
+    )
+    expect(hook.result.current.release).toBeNull()
+    expect(hook.result.current.snapshot?.error).toBeNull()
+    expect(hook.result.current.hasUpdate).toBe(false)
+  })
+
+  test('records a network error when the version file is unreachable as well', async () => {
+    fetchMock.mockResolvedValue(new Response('', { status: 403 }))
+    const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
+    await waitFor(() =>
+      expect(hook.result.current.snapshot?.error).toBe('network')
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
