@@ -1,0 +1,84 @@
+# Frontend Development - Backend built from local source
+#
+# 本文件仅用于本地开发，不包含任何内置账号或密码：
+#   - PostgreSQL 采用 trust 认证（仅限本容器网络，未对宿主机暴露端口）；
+#   - Redis 未设置密码。
+#   生产/正式部署请使用仓库根目录的 docker-compose.yml（凭据由 .env 提供）。
+#
+# Usage:
+#   1. docker compose -f docker-compose.dev.yml up -d
+#   2. make dev-web
+#   3. Open http://localhost:5173 (Rsbuild dev server, API auto-proxied to :3000)
+#
+# Rebuild backend after Go code changes:
+#   docker compose -f docker-compose.dev.yml up -d --build myapi
+#
+# Stop:
+#   docker compose -f docker-compose.dev.yml down
+#
+# Reset data:
+#   docker compose -f docker-compose.dev.yml down -v
+
+services:
+  myapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: myapi-dev:local
+    container_name: myapi-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - dev_data:/data
+    environment:
+      - SQL_DSN=postgresql://root@postgres:5432/myapi
+      - REDIS_CONN_STRING=redis://redis
+      - TZ=Asia/Shanghai
+      - BATCH_UPDATE_ENABLED=true
+      # Local HTTP dev mode: keep Secure=false and leave TRUSTED_URL unset. This disables the refresh/logout OriginGuard so the :5173 -> :3000 dev proxy works.
+      - SESSION_COOKIE_SECURE=false
+      # For HTTPS only: set Secure=true and list every exact trusted HTTPS browser Origin. This does not configure relay CORS.
+      # - SESSION_COOKIE_SECURE=true
+      # - SESSION_COOKIE_TRUSTED_URL=https://example.com,https://admin.example.com
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - dev-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: myapi-dev-redis
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: myapi-dev-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_DB: myapi
+      # 开发专用：容器网络内的 trust 认证，无密码。切勿用于生产。
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - dev_pg_data:/var/lib/postgresql/data
+    networks:
+      - dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d myapi"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  dev_data:
+  dev_pg_data:
+
+networks:
+  dev-network:
+    driver: bridge
