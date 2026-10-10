@@ -139,7 +139,7 @@
 - **圆角与字体**：圆角基准 `--radius` 由 `1rem` 调整为 `0.75rem`；新增 `--font-mono`，`--font-sans` 首选族改为 Inter，并新增依赖 `@fontsource-variable/inter`、`@fontsource-variable/roboto-mono`，在 `web/src/styles/index.css` 全局引入（字体本地自托管，不请求外部 CDN）。
 - **首页与 CTA**：徽章与背景光晕改用信号蓝，标题渐变由蓝→紫改为 `primary → signal → info`（`web/src/features/home/components/sections/hero.tsx`、`cta.tsx`）。
 - **公共顶栏**：未滚动时导航高度由 64px 调整为 72px（`web/src/components/layout/components/public-header.tsx`）。
-- **内容宽度**：`max-w-container` 由 1280px 调整为 1200px（`web/src/styles/index.css`）。
+- **容器宽度（预置，暂无可见差异）**：`max-w-container` 由 1280px 调整为 1200px（`web/src/styles/index.css`）。该工具类目前没有被任何页面引用（首页各区块仍使用 `max-w-6xl`），因此只改动了取值本身。
 
 > 仅外观改动：不新增路由、不改接口、不动数据。`web/src/styles/theme-presets.css` 中的可选配色预设与用户本地主题偏好不受影响——未选择预设时落到上述基础令牌。
 
