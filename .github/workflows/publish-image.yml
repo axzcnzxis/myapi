@@ -10,8 +10,11 @@
 #   DOCKERHUB_TOKEN     Docker Hub → Account Settings → Personal access tokens 生成的令牌
 # 未配置时本次只发布 GHCR，并在运行摘要中给出告警。
 #
-# GHCR 使用内置 GITHUB_TOKEN，无需任何配置；若包被设为私有，匿名拉取会失败，
-# 需在包设置里把可见性改为 Public。
+# GHCR 使用内置 GITHUB_TOKEN，无需配置，但要求 ghcr.io/axzcnzxis/myapi 这个包
+# 已关联到本仓库（Package settings → Connect repository）；包未关联时会报
+# permission_denied: write_package，此时改为配置 Secrets 里的 GHCR_TOKEN
+# （classic PAT，勾选 write:packages）即可，工作流会优先使用它。
+# 另外，若包被设为私有，匿名拉取会失败，需在包设置里把可见性改为 Public。
 name: Publish myapi image
 
 on:
@@ -66,7 +69,10 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # 默认用内置 GITHUB_TOKEN：要求包已关联到本仓库（Package settings → Connect repository）。
+          # 若包未关联，GITHUB_TOKEN 推送会报 permission_denied: write_package，
+          # 此时可改为配置 GHCR_TOKEN（classic PAT，勾选 write:packages），优先级更高。
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
         if: steps.targets.outputs.dockerhub == 'true'
