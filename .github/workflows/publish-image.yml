@@ -92,11 +92,13 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Summary
+        if: always()
         run: |
           {
-            echo "### 已发布镜像"
+            echo "### 目标镜像"
             echo '```'
             echo "${{ steps.targets.outputs.tags }}"
             echo '```'
-            echo "提交：\`${{ github.sha }}\`"
+            echo "- Docker Hub：\`${{ steps.targets.outputs.dockerhub }}\`"
+            echo "- 提交：\`${{ github.sha }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
