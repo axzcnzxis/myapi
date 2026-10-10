@@ -68,6 +68,7 @@ jobs:
             echo "TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
           printf '%s\n' "$tags"
+          echo "::notice::本次发布目标：$(printf '%s' "$tags" | tr '\n' ' ')"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
