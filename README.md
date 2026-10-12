@@ -36,7 +36,7 @@
 | 本仓库 | <https://github.com/axzcnzxis/myapi> |
 | 上游项目 | <https://github.com/QuantumNous/new-api> |
 | 上游基线 | `v1.0.0-rc.41`（git 提交 `973cf8ef4`） |
-| 本仓库版本号 | 见 [`VERSION`](./VERSION)（当前 `v0.0.1`） |
+| 本仓库版本号 | 见 [`VERSION`](./VERSION)（当前 `v0.0.10`） |
 | 许可 | AGPL-3.0（含 Section 7 附加条款，见 [`LICENSE`](./LICENSE) / [`NOTICE`](./NOTICE)） |
 
 > 本仓库是**衍生作品**，不是 new-api 官方仓库。上游与本仓库的文档、Issue、Release 互不相通，请勿把本仓库的问题反馈到上游。
