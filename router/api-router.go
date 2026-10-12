@@ -293,6 +293,7 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.GET("/search", middleware.SearchRateLimit(), controller.SearchTokens)
 			tokenRoute.GET("/auto-groups", controller.GetTokenAutoGroups)
 			tokenRoute.GET("/key-support", controller.GetTokenKeySupport)
+			tokenRoute.GET("/wallet-support", controller.GetTokenWalletSupport)
 			tokenRoute.GET("/:id", controller.GetToken)
 			tokenRoute.POST("/:id/key", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKey)
 			tokenRoute.POST("/", controller.AddToken)
@@ -300,6 +301,19 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
+		}
+
+		// 管理员跨用户 API Key 管理 + 钱包可用模型（全局/按用户）配置
+		keyAdminRoute := apiRouter.Group("/key-admin")
+		keyAdminRoute.Use(middleware.AdminAuth())
+		{
+			keyAdminRoute.POST("/tokens", controller.AdminAddToken)
+			keyAdminRoute.PUT("/tokens/:id", controller.AdminUpdateToken)
+			keyAdminRoute.GET("/wallet-models", controller.AdminGetWalletKeySupport)
+			keyAdminRoute.PUT("/wallet-models", controller.AdminUpdateWalletKeySupport)
+			keyAdminRoute.GET("/users/:id/wallet-models", controller.AdminGetUserWalletOverride)
+			keyAdminRoute.PUT("/users/:id/wallet-models", controller.AdminUpdateUserWalletOverride)
+			keyAdminRoute.GET("/users/:id/key-support-groups", controller.AdminGetUserKeySupportGroups)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

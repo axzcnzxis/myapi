@@ -107,13 +107,10 @@ const defaultBillingSettings: BillingSettings = {
   'checkin_setting.enabled': false,
   'checkin_setting.min_quota': 1000,
   'checkin_setting.max_quota': 10000,
-  'key_support_setting.enabled': false,
-  'key_support_setting.derive_from_subscription': true,
   'key_support_setting.fusion_enabled': true,
   'key_support_setting.expose_groups': true,
   'key_support_setting.max_groups': 5,
   'key_support_setting.group_priority': '["vip","svip"]',
-  'key_support_setting.balance_enabled': false,
   'key_support_setting.balance_groups': '[]',
   'key_support_setting.balance_models': '[]',
 }

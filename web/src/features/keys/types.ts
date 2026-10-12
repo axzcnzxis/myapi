@@ -101,11 +101,9 @@ export interface TokenAutoGroupsConfig {
   max_count: number
 }
 
-// Key support policy: when derive is on the Auto group of a key is resolved
-// from the user active subscriptions instead of the user selection.
+// Key support policy: a key bound to the Auto group always resolves its groups
+// from the user's active subscriptions instead of a manual selection.
 export interface TokenKeySupportConfig {
-  enabled: boolean
-  derive: boolean
   expose: boolean
   groups: string[]
   max_count: number

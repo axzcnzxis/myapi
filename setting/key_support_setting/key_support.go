@@ -39,19 +39,24 @@ const DefaultMaxGroups = 5
 
 // KeySupportSetting controls two related administrator policies:
 //
-//  1. How an API key's group set is derived. When Enabled and
-//     DeriveFromSubscription are both true, a key created with group "auto"
-//     receives the groups served by the user's active subscriptions instead of
-//     a hand-picked list, so one key transparently covers every subscribed
-//     plan (and the wallet's base group when nothing is subscribed).
-//  2. Which groups/models the wallet balance may pay for (Balance*).
+//  1. How an API key's group set is derived. A key bound to the "auto" group
+//     always receives the groups served by the user's active subscriptions
+//     instead of a hand-picked list, so one key transparently covers every
+//     subscribed plan (and the wallet's base group when nothing is subscribed).
+//     FusionEnabled/GroupPriority/MaxGroups tune that derivation. There is no
+//     on/off switch: the user's current subscriptions are the source of truth.
+//  2. Which groups/models the wallet balance may pay for (Balance*). Both lists
+//     are self-applying: a non-empty group list restricts the wallet path *and*
+//     grants reachability, because a listed group is added to the derived group
+//     set of an "auto" key even when the user's own entitlement does not cover
+//     it, so a balance-only account can route through it; a non-empty model list
+//     restricts the wallet path *and* is the only catalogue that path
+//     advertises, so a balance-only account is offered exactly the listed models
+//     instead of its base group's whole catalogue. Subscription groups and the
+//     models they serve are never limited by these lists. An empty list means
+//     "no restriction and no grant". There is no separate on/off switch — the
+//     list itself is the switch.
 type KeySupportSetting struct {
-	// Enabled is the master switch; when false every behaviour below is off and
-	// keys keep the previous hand-picked semantics.
-	Enabled bool `json:"enabled"`
-	// DeriveFromSubscription makes "auto" keys inherit the user's subscription
-	// groups at creation/edit time.
-	DeriveFromSubscription bool `json:"derive_from_subscription"`
 	// FusionEnabled allows several subscription groups to be fused into one key.
 	// When false only the highest-priority subscription group is used.
 	FusionEnabled bool `json:"fusion_enabled"`
@@ -66,24 +71,24 @@ type KeySupportSetting struct {
 	// placed after the listed ones.
 	GroupPriority []string `json:"group_priority"`
 
-	// BalanceEnabled turns on the wallet model/group allow-list.
-	BalanceEnabled bool `json:"balance_enabled"`
-	// BalanceGroups restricts the wallet to these groups (empty = no restriction).
+	// BalanceGroups is the wallet group allow-list. Non-empty: the wallet may
+	// only pay for these groups and the list grants them to "auto" keys. Empty:
+	// no restriction and no grant.
 	BalanceGroups []string `json:"balance_groups"`
-	// BalanceModels restricts the wallet to these models (empty = no restriction).
+	// BalanceModels is the wallet model allow-list. Non-empty: the wallet may
+	// only pay for these models and the wallet path advertises exactly them, so a
+	// balance-only account no longer sees its base group's whole catalogue.
+	// Empty: no restriction.
 	BalanceModels []string `json:"balance_models"`
 }
 
 var keySupportSetting = KeySupportSetting{
-	Enabled:                false,
-	DeriveFromSubscription: true,
-	FusionEnabled:          true,
-	ExposeGroups:           true,
-	MaxGroups:              DefaultMaxGroups,
-	GroupPriority:          []string{"vip", "svip"},
-	BalanceEnabled:         false,
-	BalanceGroups:          []string{},
-	BalanceModels:          []string{},
+	FusionEnabled: true,
+	ExposeGroups:  true,
+	MaxGroups:     DefaultMaxGroups,
+	GroupPriority: []string{"vip", "svip"},
+	BalanceGroups: []string{},
+	BalanceModels: []string{},
 }
 
 func init() {
@@ -99,23 +104,14 @@ func GetSetting() KeySupportSetting {
 	return s
 }
 
-// IsEnabled reports whether the key-support policy is active at all.
-func IsEnabled() bool { return keySupportSetting.Enabled }
-
-// DeriveFromSubscription reports whether "auto" keys should be derived from the
-// user's active subscriptions.
-func DeriveFromSubscription() bool {
-	return keySupportSetting.Enabled && keySupportSetting.DeriveFromSubscription
-}
-
 // FusionEnabled reports whether several subscription groups may share one key.
 func FusionEnabled() bool {
-	return keySupportSetting.Enabled && keySupportSetting.FusionEnabled
+	return keySupportSetting.FusionEnabled
 }
 
 // ExposeGroups reports whether the console should expand a key's real groups.
 func ExposeGroups() bool {
-	return keySupportSetting.Enabled && keySupportSetting.ExposeGroups
+	return keySupportSetting.ExposeGroups
 }
 
 // MaxGroups returns the effective derived-group cap.
@@ -126,9 +122,67 @@ func MaxGroups() int {
 	return DefaultMaxGroups
 }
 
-// BalanceEnabled reports whether the wallet allow-list is active.
-func BalanceEnabled() bool {
-	return keySupportSetting.Enabled && keySupportSetting.BalanceEnabled
+// WalletGroupsFor returns the effective wallet group allow-list for a user, or
+// nil when the list is empty or holds no usable group.
+//
+// The list is self-applying: a non-empty result is both the set of groups the
+// wallet may pay for and the set of groups the allow-list makes reachable for
+// the user's "auto" keys. A nil result means the wallet is unrestricted, which
+// also means it grants no extra group.
+func WalletGroupsFor(overrideGroups []string) []string {
+	groups := keySupportSetting.BalanceGroups
+	if overrideGroups != nil {
+		groups = overrideGroups
+	}
+	return normalizeNames(groups)
+}
+
+// WalletModelsFor returns the effective wallet model allow-list for a user, or
+// nil when the list is empty or holds no usable entry.
+//
+// Like WalletGroupsFor the list is self-applying: a non-empty result is both the
+// set of models the wallet may pay for and the set of models the wallet path
+// advertises, so a balance-only account is offered exactly the listed models
+// instead of its base group's whole catalogue. A nil result means the wallet is
+// unrestricted, so everything the key can reach is advertised as before.
+func WalletModelsFor(overrideModels []string) []string {
+	models := keySupportSetting.BalanceModels
+	if overrideModels != nil {
+		models = overrideModels
+	}
+	return normalizeNames(models)
+}
+
+// normalizeNames trims every entry, drops blanks and de-duplicates
+// case-insensitively, returning nil when nothing usable is left.
+func normalizeNames(names []string) []string {
+	if len(names) == 0 {
+		return nil
+	}
+	normalized := make([]string, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, name)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+// ContainsGroup reports whether list contains group, ignoring case and
+// surrounding whitespace.
+func ContainsGroup(list []string, group string) bool {
+	return containsFold(list, group)
 }
 
 // OrderGroups reorders groups so that members of GroupPriority come first, in
@@ -165,17 +219,27 @@ func OrderGroups(groups []string) []string {
 }
 
 // CheckWalletAllowed returns an error when the wallet balance must not pay for
-// the given group/model. A disabled switch or an empty list means "no
-// restriction", so the previous behaviour is preserved until an administrator
-// opts in.
+// the given group/model. An empty list means "no restriction", so the previous
+// behaviour is preserved until an administrator lists something.
 func CheckWalletAllowed(group, model string) error {
-	if !BalanceEnabled() {
-		return nil
-	}
-	if len(keySupportSetting.BalanceGroups) > 0 && !containsFold(keySupportSetting.BalanceGroups, group) {
+	return CheckWalletAllowedForUser(nil, nil, group, model)
+}
+
+// CheckWalletAllowedForUser is the per-user counterpart of CheckWalletAllowed.
+// An administrator may override the global wallet allow-list for a single user:
+// overrideGroups/overrideModels replace the global lists when non-nil; a nil
+// slice inherits the global list. A non-nil but empty slice means "no
+// restriction" for that dimension.
+//
+// A non-empty effective list is self-applying: the wallet may only pay for its
+// members. An empty effective list means "no restriction".
+func CheckWalletAllowedForUser(overrideGroups, overrideModels []string, group, model string) error {
+	groups := WalletGroupsFor(overrideGroups)
+	if len(groups) > 0 && !ContainsGroup(groups, group) {
 		return fmt.Errorf("余额不可用于分组 %q，请使用对应的订阅套餐", group)
 	}
-	if len(keySupportSetting.BalanceModels) > 0 && !containsFold(keySupportSetting.BalanceModels, model) {
+	models := WalletModelsFor(overrideModels)
+	if len(models) > 0 && !containsFold(models, model) {
 		return fmt.Errorf("模型 %q 不在余额可用范围内", model)
 	}
 	return nil

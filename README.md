@@ -121,14 +121,14 @@
 
 ### 8. Key 支持策略（新增）
 
-一组管理员策略（默认关闭，不改变上游行为）：
+一组管理员策略：
 
 1. **按订阅自动派生 Key 分组**：新建 / 编辑 `auto` 分组的令牌时，按用户有效订阅推导分组集合（可融合多订阅分组、按优先级排序、限制数量、控制控制台是否展开真实分组）。
-2. **钱包可用范围白名单**：限定钱包余额可支付的分组 / 模型。
+2. **钱包可用范围白名单（列表即生效，无开关）**：非空列表同时起两种作用——**限制**钱包余额只为列出的分组 / 模型付费，并**授予**这些分组对 `auto` 令牌可达，因此仅有余额（无有效订阅）的账户也能用 `auto` 密钥路由到它们；列表留空表示既不限制、也不额外授予。该列表没有启用开关，配置列表本身即是开关。
 
-- 新配置模块 `setting/key_support_setting/`（`key_support_setting.*`，9 个选项，默认 `enabled=false`）。
+- 新配置模块 `setting/key_support_setting/`（`key_support_setting.*`，6 个选项：`fusion_enabled`、`expose_groups`、`max_groups`、`group_priority`、`balance_groups`、`balance_models`）。
 - `service/key_support.go`：`ResolveKeyGroups` / `EffectiveAutoGroups` / `SyncDerivedTokenGroupsTx`；`model/derived_token_groups.go` 以钩子方式避免 model→service 循环依赖。
-- 新路由：`GET /api/token/key-support`；`middleware/auth.go` 对 auto 令牌做请求期分组收缩；`service/billing_session.go` 钱包路径执行 `CheckWalletAllowed`。
+- 新路由：`GET /api/token/key-support`；`middleware/auth.go` 对 `auto` 令牌做请求期分组收缩（可用分组 = 有效订阅分组 ∪ 钱包白名单分组，按 `GroupPriority` 排序；钱包分组绕过 `IsUserSelectableGroup`，但仍需 `ratio_setting.ContainsGroupRatio`；该授予仅作用于 `auto` 令牌，显式指定具体分组的令牌校验不变）；`service/billing_session.go` 钱包路径执行 `CheckWalletAllowed`。
 - 前端：`web/src/features/system-settings/billing/key-support-section.tsx`（新增）与令牌页相关组件。
 
 ### 9. 界面视觉改版（新增）

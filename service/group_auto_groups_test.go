@@ -70,3 +70,37 @@ func TestGetRequestAutoGroupsDoesNotFallBackAfterPermissionChange(t *testing.T) 
 
 	assert.Empty(t, groups)
 }
+
+// configureWalletGrantRequestTest installs a production-shaped group policy where
+// svip has a ratio but is not selectable for a "default" user, so the only way it
+// can survive the request-time filter is the wallet grant.
+func configureWalletGrantRequestTest(t *testing.T) {
+	t.Helper()
+	originalMax := setting.GetMaxTokenAutoGroups()
+	originalUsable := setting.UserUsableGroups2JSONString()
+	originalRatios := ratio_setting.GroupRatio2JSONString()
+	require.NoError(t, setting.UpdateMaxTokenAutoGroups("3"))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"Default","vip":"VIP"}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":1,"svip":1}`))
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateMaxTokenAutoGroups(fmt.Sprintf("%d", originalMax)))
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsable))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalRatios))
+	})
+}
+
+// The wallet allow-list carried by the request makes its groups survive the
+// selectable-group filter, while a group without a ratio never does.
+func TestGetRequestAutoGroupsKeepsWalletGrantedGroup(t *testing.T) {
+	configureWalletGrantRequestTest(t)
+	ctx := newRequestAutoGroupsContext()
+	common.SetContextKey(ctx, constant.ContextKeyTokenAutoGroups, []string{"svip", "ghost", "vip", "default"})
+
+	// Without a grant only the selectable groups survive.
+	assert.Equal(t, []string{"vip", "default"}, GetRequestAutoGroups(ctx, "default"))
+
+	// A granted svip is reachable and keeps its snapshot position; ghost has no
+	// group ratio, so granting it is still not enough.
+	common.SetContextKey(ctx, constant.ContextKeyTokenWalletGroups, []string{"svip", "ghost"})
+	assert.Equal(t, []string{"svip", "vip", "default"}, GetRequestAutoGroups(ctx, "default"))
+}

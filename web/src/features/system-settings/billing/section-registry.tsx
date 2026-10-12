@@ -208,13 +208,10 @@ const BILLING_SECTIONS = [
     build: (settings: BillingSettings) => (
       <KeySupportSection
         defaultValues={{
-          enabled: settings['key_support_setting.enabled'],
-          derive: settings['key_support_setting.derive_from_subscription'],
           fusion: settings['key_support_setting.fusion_enabled'],
           expose: settings['key_support_setting.expose_groups'],
           maxGroups: settings['key_support_setting.max_groups'],
           groupPriority: settings['key_support_setting.group_priority'],
-          balanceEnabled: settings['key_support_setting.balance_enabled'],
           balanceGroups: settings['key_support_setting.balance_groups'],
           balanceModels: settings['key_support_setting.balance_models'],
         }}

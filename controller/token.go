@@ -88,65 +88,22 @@ func getTokenRequestUserGroup(c *gin.Context) (string, error) {
 	return model.GetUserGroup(c.GetInt("id"), false)
 }
 
-func setTokenAutoGroups(c *gin.Context, token *model.Token, groups []string) bool {
-	if len(groups) == 0 {
-		if err := token.SetAutoGroups(nil); err != nil {
-			common.ApiError(c, err)
-			return false
-		}
-		return true
-	}
-
-	maxCount := setting.GetMaxTokenAutoGroups()
-	if len(groups) > maxCount {
-		common.ApiErrorI18n(c, i18n.MsgTokenAutoGroupsTooMany, map[string]any{"Max": maxCount})
-		return false
-	}
-
-	userGroup, err := getTokenRequestUserGroup(c)
+// applyKeySupportAutoGroups replaces a token's hand-picked Auto groups with the
+// set derived from the user's active subscriptions. A token bound to the "auto"
+// group always follows the current subscriptions, so there is no manual list to
+// fall back to. It reports whether the request may continue; a false return
+// means an error was already written to the response.
+func applyKeySupportAutoGroups(c *gin.Context, token *model.Token) bool {
+	groups, err := service.ResolveKeyGroups(c.GetInt("id"))
 	if err != nil {
 		common.ApiError(c, err)
 		return false
 	}
-	seen := make(map[string]struct{}, len(groups))
-	for _, group := range groups {
-		if _, ok := seen[group]; ok {
-			common.ApiErrorI18n(c, i18n.MsgTokenAutoGroupsDuplicate, map[string]any{"Group": group})
-			return false
-		}
-		seen[group] = struct{}{}
-		if !service.IsUserSelectableGroup(userGroup, group) {
-			common.ApiErrorI18n(c, i18n.MsgTokenAutoGroupsInvalid, map[string]any{"Group": group})
-			return false
-		}
-	}
-
 	if err := token.SetAutoGroups(groups); err != nil {
 		common.ApiError(c, err)
 		return false
 	}
 	return true
-}
-
-// applyKeySupportAutoGroups replaces a token's hand-picked Auto groups with the
-// subscription-derived set when the administrator enabled derivation. It
-// returns (applied, ok): applied reports whether derivation ran, and ok reports
-// whether the request may continue (a false ok means an error was already
-// written to the response).
-func applyKeySupportAutoGroups(c *gin.Context, token *model.Token) (bool, bool) {
-	if !keysupport.DeriveFromSubscription() {
-		return false, true
-	}
-	groups, err := service.ResolveKeyGroups(c.GetInt("id"))
-	if err != nil {
-		common.ApiError(c, err)
-		return true, false
-	}
-	if err := token.SetAutoGroups(groups); err != nil {
-		common.ApiError(c, err)
-		return true, false
-	}
-	return true, true
 }
 
 func GetAllTokens(c *gin.Context) {
@@ -214,8 +171,6 @@ func GetTokenKeySupport(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, gin.H{
-		"enabled":   keysupport.IsEnabled(),
-		"derive":    keysupport.DeriveFromSubscription(),
 		"expose":    keysupport.ExposeGroups(),
 		"groups":    groups,
 		"max_count": keysupport.MaxGroups(),
@@ -353,9 +308,7 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	if token.Group == "auto" {
-		if applied, ok := applyKeySupportAutoGroups(c, &token); !ok {
-			return
-		} else if !applied && !setTokenAutoGroups(c, &token, request.AutoGroups.Groups) {
+		if !applyKeySupportAutoGroups(c, &token) {
 			return
 		}
 	} else {
@@ -481,12 +434,8 @@ func UpdateToken(c *gin.Context) {
 		if token.Group != "auto" {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
-		} else if applied, ok := applyKeySupportAutoGroups(c, cleanToken); !ok {
+		} else if !applyKeySupportAutoGroups(c, cleanToken) {
 			return
-		} else if !applied && request.AutoGroups.Set {
-			if !setTokenAutoGroups(c, cleanToken, request.AutoGroups.Groups) {
-				return
-			}
 		}
 	}
 	err = cleanToken.Update()

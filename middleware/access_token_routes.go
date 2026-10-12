@@ -224,6 +224,10 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"POST /api/token/batch":      accessTokenScopeRule("api_key:write"),
 	"POST /api/token/batch/keys": accessTokenScopeRule("api_key:reveal"),
 
+	// router/api-router.go: /api/token (key/wallet support of the caller's own key)
+	"GET /api/token/key-support":    accessTokenScopeRule("api_key:read"),
+	"GET /api/token/wallet-support": accessTokenScopeRule("api_key:read"),
+
 	// router/api-router.go: /api/redemption
 	"GET /api/redemption/":           accessTokenScopeRule("redemption:read"),
 	"GET /api/redemption/search":     accessTokenScopeRule("redemption:read"),
@@ -233,6 +237,16 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"PUT /api/redemption/":           accessTokenScopeRule("redemption:write"),
 	"DELETE /api/redemption/invalid": accessTokenScopeRule("redemption:write"),
 	"DELETE /api/redemption/:id":     accessTokenScopeRule("redemption:write"),
+
+	// router/api-router.go: /api/announcement (administrator-managed site
+	// content; the public /api/announcements/* routes are anonymous and exempt).
+	"GET /api/announcement/":             accessTokenScopeRule("option:read"),
+	"GET /api/announcement/:id":          accessTokenScopeRule("option:read"),
+	"POST /api/announcement/":            accessTokenScopeRule("option:write"),
+	"PUT /api/announcement/":             accessTokenScopeRule("option:write"),
+	"DELETE /api/announcement/:id":       accessTokenScopeRule("option:write"),
+	"POST /api/announcement/:id/publish": accessTokenScopeRule("option:write"),
+	"POST /api/announcement/:id/cancel":  accessTokenScopeRule("option:write"),
 
 	// router/api-router.go: /api/audit, /api/log, /api/data
 	"GET /api/audit/self":                       accessTokenScopeRule("usage:read"),
@@ -303,6 +317,18 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"PUT /api/deployments/:id/name":                     accessTokenScopeRule("deployment:write"),
 	"POST /api/deployments/:id/extend":                  accessTokenScopeRule("deployment:write"),
 	"DELETE /api/deployments/:id":                       accessTokenScopeRule("deployment:write"),
+
+	// router/api-router.go: /api/key-admin (administrator, cross-user)
+	// Cross-user key management and per-user wallet overrides act on other
+	// people's credentials, so they require a browser session instead of a
+	// personal access token.
+	"GET /api/key-admin/users/:id/key-support-groups": accessTokenSessionRule,
+	"GET /api/key-admin/users/:id/wallet-models":      accessTokenSessionRule,
+	"GET /api/key-admin/wallet-models":                accessTokenSessionRule,
+	"POST /api/key-admin/tokens":                      accessTokenSessionRule,
+	"PUT /api/key-admin/tokens/:id":                   accessTokenSessionRule,
+	"PUT /api/key-admin/users/:id/wallet-models":      accessTokenSessionRule,
+	"PUT /api/key-admin/wallet-models":                accessTokenSessionRule,
 
 	// router/relay-router.go
 	"POST /pg/chat/completions": accessTokenSessionRule,

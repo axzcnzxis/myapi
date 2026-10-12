@@ -92,7 +92,6 @@ import {
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
 import { useApiKeys } from './api-keys-provider'
-import { AutoGroupOrderEditor } from './auto-group-order-editor'
 
 type ApiKeyMutateDrawerProps = {
   open: boolean
@@ -166,38 +165,39 @@ export function ApiKeysMutateDrawer({
     enabled: open,
     staleTime: 0,
   })
-  const deriveKeySupport = keySupportData?.data?.derive === true
+  // A key bound to the "auto" group always follows the groups served by the
+  // user's active subscriptions plus the groups the wallet allow-list grants, so
+  // the console shows that derived set instead of a manual selector.
   const derivedGroups = keySupportData?.data?.groups ?? []
 
   const models = modelsData?.data || []
-  const groups = useMemo<ApiKeyGroupOption[]>(
-    () =>
-      Object.entries(groupsData?.data || {}).map(([key, info]) => ({
+  const groups = useMemo<ApiKeyGroupOption[]>(() => {
+    const options = Object.entries(groupsData?.data || {}).map(
+      ([key, info]) => ({
         value: key,
         label: key,
         desc: info.desc || key,
         ratio: info.ratio,
-      })),
-    [groupsData]
-  )
-  const backendHasAuto = groups.some((g) => g.value === 'auto')
+      })
+    )
+    // The backend only advertises the "auto" group when it is explicitly
+    // listed in the user usable groups, but a key may always follow the groups
+    // derived from the user subscriptions and the wallet allow-list. Keep "auto"
+    // selectable so it is never dropped in favour of "default".
+    if (!options.some((option) => option.value === 'auto')) {
+      options.unshift({
+        value: 'auto',
+        label: t('Auto'),
+        desc: t('Follow your subscriptions and wallet-allowed groups'),
+        ratio: t('Auto'),
+      })
+    }
+    return options
+  }, [groupsData, t])
   const availableAutoGroupNames = useMemo(
     () => groups.filter((group) => group.value !== 'auto').map((g) => g.value),
     [groups]
   )
-  const globalAutoGroups = useMemo(() => {
-    const available = new Set(availableAutoGroupNames)
-    return (autoGroupsData?.data?.groups || []).filter((group) =>
-      available.has(group)
-    )
-  }, [autoGroupsData, availableAutoGroupNames])
-  const globalAutoGroupOptions = useMemo(() => {
-    const groupsByValue = new Map(groups.map((group) => [group.value, group]))
-    return globalAutoGroups.flatMap((group) => {
-      const option = groupsByValue.get(group)
-      return option ? [option] : []
-    })
-  }, [globalAutoGroups, groups])
   // GroupBadge only accepts a numeric ratio, while the group option may carry a
   // string one, so keep the numeric entries for the derived-group preview.
   const groupRatioByValue = useMemo(() => {
@@ -255,11 +255,8 @@ export function ApiKeysMutateDrawer({
         setInitializedTarget(target)
       }
     } else {
-      form.reset(
-        getApiKeyFormDefaultValues(
-          (defaultUseAutoGroup || deriveKeySupport) && backendHasAuto
-        )
-      )
+      // A newly created key always follows the derived "auto" group.
+      form.reset(getApiKeyFormDefaultValues(true))
       setInitializedTarget(target)
     }
   }, [
@@ -267,10 +264,7 @@ export function ApiKeysMutateDrawer({
     isUpdate,
     currentRow,
     form,
-    defaultUseAutoGroup,
-    deriveKeySupport,
     statusLoading,
-    backendHasAuto,
     groupsFetched,
     groupsFetching,
     autoGroupsFetched,
@@ -386,8 +380,11 @@ export function ApiKeysMutateDrawer({
   const quotaPlaceholder = tokensOnly
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
-  const autoGroupsMode = form.watch('auto_groups_mode')
   const unlimitedQuota = form.watch('unlimited_quota')
+  // A newly created key always uses the derived "auto" group, so the group
+  // selector is never shown when creating. Updates keep the selector so
+  // existing keys can still be moved between groups.
+  const hideGroupSelector = !isUpdate
 
   return (
     <Sheet
@@ -441,100 +438,70 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name='group'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Group')}</FormLabel>
-                    <FormControl>
-                      <ApiKeyGroupCombobox
-                        options={groups}
-                        value={field.value}
-                        onValueChange={(group) => {
-                          field.onChange(group)
-                          if (group === 'auto') {
-                            form.setValue('cross_group_retry', true, {
+              {!hideGroupSelector && (
+                <FormField
+                  control={form.control}
+                  name='group'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Group')}</FormLabel>
+                      <FormControl>
+                        <ApiKeyGroupCombobox
+                          options={groups}
+                          value={field.value}
+                          onValueChange={(group) => {
+                            field.onChange(group)
+                            if (group === 'auto') {
+                              form.setValue('cross_group_retry', true, {
+                                shouldDirty: true,
+                              })
+                              return
+                            }
+                            form.setValue('cross_group_retry', false, {
                               shouldDirty: true,
                             })
-                            return
-                          }
-                          form.setValue('cross_group_retry', false, {
-                            shouldDirty: true,
-                          })
-                        }}
-                        placeholder={t('Select a group')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                          }}
+                          placeholder={t('Select a group')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {selectedGroup === 'auto' && (
                 <FormField
                   control={form.control}
                   name='auto_groups'
-                  render={({ field }) => (
+                  render={() => (
                     <FormItem>
-                      <FormLabel>
-                        {deriveKeySupport
-                          ? t('Groups derived from your subscriptions')
-                          : t('Auto group order')}
-                      </FormLabel>
+                      <FormLabel>{t('Groups this key may use')}</FormLabel>
                       <FormDescription>
-                        {deriveKeySupport
-                          ? t(
-                              'The key support policy derives these groups from your active subscriptions; no manual selection is required.'
-                            )
-                          : t(
-                              'Choose and order the groups this API key will try.'
-                            )}
+                        {t(
+                          'These groups come from your active subscriptions and the groups your wallet balance may use; no manual selection is required.'
+                        )}
                       </FormDescription>
                       <FormControl>
-                        {deriveKeySupport ? (
-                          <div className='flex flex-wrap items-center gap-3'>
-                            {derivedGroups.length > 0 ? (
-                              derivedGroups.map((group) => (
-                                <GroupBadge
-                                  key={group}
-                                  group={group}
-                                  ratio={groupRatioByValue.get(group)}
-                                  type='text'
-                                  className='px-0'
-                                />
-                              ))
-                            ) : (
-                              <span className='text-muted-foreground text-xs'>
-                                {t(
-                                  'No active subscription, the key falls back to the default group.'
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <AutoGroupOrderEditor
-                            value={field.value}
-                            mode={autoGroupsMode}
-                            options={groups}
-                            globalOptions={globalAutoGroupOptions}
-                            maxCount={maxAutoGroups}
-                            onChange={(value) => {
-                              form.setValue('auto_groups_mode', value.mode, {
-                                shouldDirty: true,
-                                shouldValidate: false,
-                              })
-                              form.setValue(
-                                'auto_groups',
-                                value.groups.slice(0, maxAutoGroups),
-                                {
-                                  shouldDirty: true,
-                                  shouldValidate: true,
-                                }
-                              )
-                            }}
-                          />
-                        )}
+                        <div className='flex flex-wrap items-center gap-3'>
+                          {derivedGroups.length > 0 ? (
+                            derivedGroups.map((group) => (
+                              <GroupBadge
+                                key={group}
+                                group={group}
+                                ratio={groupRatioByValue.get(group)}
+                                type='text'
+                                className='px-0'
+                              />
+                            ))
+                          ) : (
+                            <span className='text-muted-foreground text-xs'>
+                              {t(
+                                'No subscription or wallet group, the key falls back to the default group.'
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -105,7 +105,9 @@ func openTokenControllerTestDB(t *testing.T) *gorm.DB {
 func migrateTokenControllerTestDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
 
-	if err := db.AutoMigrate(&model.Token{}); err != nil {
+	// A key bound to the "auto" group always derives its groups from the owner's
+	// active subscriptions, so creating or updating one reads these tables.
+	if err := db.AutoMigrate(&model.Token{}, &model.UserSubscription{}, &model.SubscriptionPlan{}); err != nil {
 		t.Fatalf("failed to migrate token table: %v", err)
 	}
 }
@@ -614,7 +616,10 @@ func TestAPITokenAuditDatabaseMatrix(t *testing.T) {
 				db, _ := newAuditTestDatabase(t, database.name, dsn)
 				model.DB = db
 				common.SetDatabaseTypes(database.typ, database.typ)
-				require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Token{}))
+				// The token handlers now derive "auto" groups from the user's
+				// active subscriptions on every create/edit, so the
+				// subscription tables must exist for the audit matrix too.
+				require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSession{}, &model.Token{}, &model.UserSubscription{}, &model.SubscriptionPlan{}))
 				// Initialize production column quoting as well as the existing audit table.
 				require.NoError(t, model.InitLogDB())
 				if separateLog {

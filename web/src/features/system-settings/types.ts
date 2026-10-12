@@ -355,13 +355,10 @@ export type BillingSettings = {
   'checkin_setting.enabled': boolean
   'checkin_setting.min_quota': number
   'checkin_setting.max_quota': number
-  'key_support_setting.enabled': boolean
-  'key_support_setting.derive_from_subscription': boolean
   'key_support_setting.fusion_enabled': boolean
   'key_support_setting.expose_groups': boolean
   'key_support_setting.max_groups': number
   'key_support_setting.group_priority': string
-  'key_support_setting.balance_enabled': boolean
   'key_support_setting.balance_groups': string
   'key_support_setting.balance_models': string
 }

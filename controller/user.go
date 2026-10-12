@@ -649,10 +649,14 @@ func GetUserModels(c *gin.Context) {
 			groupsToQuery = []string{group}
 		}
 	}
+	models := service.GetGroupsEnabledModels(groupsToQuery)
+	// The wallet allow-list caps the console catalogue too, so a balance-only
+	// account is not offered models the wallet may not pay for.
+	models = service.WalletVisibleModels(id, models)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    service.GetGroupsEnabledModels(groupsToQuery),
+		"data":    models,
 	})
 }
 

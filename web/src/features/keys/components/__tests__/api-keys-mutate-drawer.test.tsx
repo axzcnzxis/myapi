@@ -37,6 +37,7 @@ type ApiMethod = (url: string, data?: unknown) => Promise<{ data: unknown }>
 type MockableApi = {
   get: ApiMethod
   post: ApiMethod
+  put: ApiMethod
 }
 type RenderedDrawer = {
   queryClient: InstanceType<typeof QueryClient>
@@ -45,9 +46,63 @@ type RenderedDrawer = {
 const apiClient = api as unknown as MockableApi
 const originalGet = apiClient.get
 const originalPost = apiClient.post
+const originalPut = apiClient.put
 let renderedDrawer: RenderedDrawer | null = null
 
-function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
+/**
+ * The group list returned by the backend when the "auto" group is explicitly
+ * listed in the user usable groups.
+ */
+const USER_GROUPS_WITH_AUTO = {
+  auto: { desc: 'Automatic routing', ratio: 'auto' },
+  default: { desc: 'Standard access', ratio: 1 },
+  vip: { desc: 'Priority access', ratio: 2 },
+}
+
+/**
+ * The production default: the backend only advertises the groups derived from
+ * the user's subscriptions and never lists "auto" itself.
+ */
+const USER_GROUPS_WITHOUT_AUTO = {
+  default: { desc: 'Standard access', ratio: 1 },
+  vip: { desc: 'Priority access', ratio: 2 },
+}
+
+/** An existing key owned by the signed-in user, used for the update drawer. */
+const EXISTING_KEY = {
+  id: 1,
+  name: 'existing',
+  key: 'sk-****',
+  status: 1,
+  remain_quota: 0,
+  used_quota: 0,
+  unlimited_quota: true,
+  expired_time: -1,
+  created_time: 0,
+  accessed_time: 0,
+  group: 'default',
+  auto_groups: [],
+  cross_group_retry: false,
+  model_limits_enabled: false,
+  model_limits: '',
+  allow_ips: '',
+}
+
+type ApiFixtureOptions = {
+  /** Payload of `GET /api/user/self/groups`. */
+  userGroups?: Record<string, unknown>
+  /** Payload of `GET /api/token/:id` when the update drawer is rendered. */
+  existingKey?: typeof EXISTING_KEY
+}
+
+function installApiFixtures(
+  createdPayloads: Array<Record<string, unknown>>,
+  updatedPayloads: Array<Record<string, unknown>>,
+  {
+    userGroups = USER_GROUPS_WITH_AUTO,
+    existingKey = EXISTING_KEY,
+  }: ApiFixtureOptions = {}
+) {
   apiClient.get = async (url) => {
     switch (url) {
       case '/api/status':
@@ -58,11 +113,7 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
         return {
           data: {
             success: true,
-            data: {
-              auto: { desc: 'Automatic routing', ratio: 'auto' },
-              default: { desc: 'Standard access', ratio: 1 },
-              vip: { desc: 'Priority access', ratio: 2 },
-            },
+            data: userGroups,
           },
         }
       case '/api/token/auto-groups':
@@ -72,6 +123,8 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
             data: { groups: ['vip', 'default'], max_count: 3 },
           },
         }
+      case '/api/token/1':
+        return { data: { success: true, data: existingKey } }
       default:
         throw new Error(`Unexpected GET ${url}`)
     }
@@ -82,12 +135,18 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
     createdPayloads.push(data as Record<string, unknown>)
     return { data: { success: true, data: {} } }
   }
+  apiClient.put = async (url, data) => {
+    expect(url).toBe('/api/token/')
+    expect(data && typeof data === 'object').toBeTruthy()
+    updatedPayloads.push(data as Record<string, unknown>)
+    return { data: { success: true, data: {} } }
+  }
 }
 
-async function renderCreateDrawer(): Promise<void> {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
+function primeSharedQueries(
+  queryClient: InstanceType<typeof QueryClient>,
+  userGroups: Record<string, unknown> = USER_GROUPS_WITH_AUTO
+) {
   const freshAt = Date.now() + 60_000
   queryClient.setQueryData(
     ['status'],
@@ -103,11 +162,7 @@ async function renderCreateDrawer(): Promise<void> {
     ['user-groups'],
     {
       success: true,
-      data: {
-        auto: { desc: 'Automatic routing', ratio: 'auto' },
-        default: { desc: 'Standard access', ratio: 1 },
-        vip: { desc: 'Priority access', ratio: 2 },
-      },
+      data: userGroups,
     },
     { updatedAt: freshAt }
   )
@@ -119,13 +174,27 @@ async function renderCreateDrawer(): Promise<void> {
     },
     { updatedAt: freshAt }
   )
+}
+
+async function renderDrawer(
+  currentRow?: typeof EXISTING_KEY,
+  userGroups: Record<string, unknown> = USER_GROUPS_WITH_AUTO
+): Promise<void> {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  primeSharedQueries(queryClient, userGroups)
   renderedDrawer = { queryClient }
 
   render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <ApiKeysProvider>
-          <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
+          <ApiKeysMutateDrawer
+            open
+            onOpenChange={() => undefined}
+            currentRow={currentRow}
+          />
         </ApiKeysProvider>
       </I18nextProvider>
     </QueryClientProvider>
@@ -151,24 +220,29 @@ function findButton(text: string, required = true): HTMLButtonElement | null {
   return button ?? null
 }
 
-function getControlByLabel(labelText: 'Name' | 'Quantity'): HTMLInputElement
-function getControlByLabel(labelText: 'Group'): HTMLButtonElement
-function getControlByLabel(labelText: 'Auto group order'): HTMLElement
-function getControlByLabel(labelText: string): HTMLElement {
+function getControlByLabel(
+  labelText: 'Name' | 'Quantity' | 'Group'
+): HTMLElement
+function getControlByLabel(labelText: string): HTMLElement | null
+function getControlByLabel(labelText: string): HTMLElement | null {
   const label = [...document.querySelectorAll<HTMLLabelElement>('label')].find(
     (candidate) => candidate.textContent?.trim() === labelText
   )
-  if (!label) {
-    throw new Error(`Expected label "${labelText}"`)
-  }
+  if (!label) return null
 
-  const control =
+  return (
     label.control ??
     label
       .closest('[data-slot="form-item"]')
       ?.querySelector<HTMLElement>(
         '[data-slot="form-control"], input, textarea, button[role="combobox"], [role="group"]'
-      )
+      ) ??
+    null
+  )
+}
+
+function requireControlByLabel(labelText: string): HTMLElement {
+  const control = getControlByLabel(labelText)
   if (!control) {
     throw new Error(`Expected control for label "${labelText}"`)
   }
@@ -179,23 +253,10 @@ function changeInput(input: HTMLInputElement, value: string): void {
   fireEvent.input(input, { target: { value } })
 }
 
-function selectComboboxOption(
-  trigger: HTMLButtonElement,
-  optionDescription: string
-): void {
-  fireEvent.click(trigger)
-  const option = [
-    ...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
-  ].find((candidate) => candidate.textContent?.includes(optionDescription))
-  if (!option) {
-    throw new Error(`Expected option containing "${optionDescription}"`)
-  }
-  fireEvent.click(option)
-}
-
 afterEach(() => {
   apiClient.get = originalGet
   apiClient.post = originalPost
+  apiClient.put = originalPut
   localStorage.clear()
   if (renderedDrawer) {
     renderedDrawer.queryClient.clear()
@@ -204,27 +265,21 @@ afterEach(() => {
 })
 
 describe('API keys mutate drawer Auto group integration', () => {
-  test('inherits the root Auto order and sends an empty override for every batch-created key', async () => {
+  test('creates every key on the derived Auto group without a group selector', async () => {
     const createdPayloads: Array<Record<string, unknown>> = []
-    installApiFixtures(createdPayloads)
-    await renderCreateDrawer()
+    installApiFixtures(createdPayloads, [])
+    await renderDrawer()
 
-    const groupTrigger = getControlByLabel('Group')
-    expect(groupTrigger.textContent?.includes('auto')).toBe(true)
-    expect(
-      document.body.textContent?.includes(
-        'Using the complete global Auto order (2 groups)'
-      )
-    ).toBe(true)
-    expect(
-      [
-        ...document.querySelectorAll('[data-slot="global-auto-order-name"]'),
-      ].map((item) => item.textContent)
-    ).toEqual(['vip', 'default'])
-    expect(findButton('Restore global Auto', true).disabled).toBe(true)
+    // The group selector is removed for creation: a new key always follows the
+    // Auto group, whose group set is derived from the user's subscriptions and
+    // the wallet allow-list.
+    expect(getControlByLabel('Group')).toBe(null)
+    expect(document.body.textContent?.includes('Groups this key may use')).toBe(
+      true
+    )
 
-    changeInput(getControlByLabel('Name'), 'batch')
-    changeInput(getControlByLabel('Quantity'), '2')
+    changeInput(requireControlByLabel('Name') as HTMLInputElement, 'batch')
+    changeInput(requireControlByLabel('Quantity') as HTMLInputElement, '2')
     fireEvent.click(findButton('Save changes', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(2))
 
@@ -237,44 +292,56 @@ describe('API keys mutate drawer Auto group integration', () => {
     }
   })
 
-  test('preserves an unsaved custom order and mode after Auto to ordinary to Auto changes', async () => {
+  test('keeps the group selector when updating an existing key', async () => {
+    const updatedPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures([], updatedPayloads)
+    await renderDrawer(EXISTING_KEY)
+
+    // Updates still expose the selector so an existing key can be moved to
+    // another group.
+    const groupControl = requireControlByLabel('Group')
+    expect(groupControl.textContent?.includes('default')).toBe(true)
+
+    fireEvent.click(findButton('Save changes', true))
+    await waitFor(() => expect(updatedPayloads).toHaveLength(1))
+    expect(updatedPayloads[0]?.group).toBe('default')
+  })
+
+  test('creates keys on the derived Auto group when the backend omits the auto group', async () => {
     const createdPayloads: Array<Record<string, unknown>> = []
-    installApiFixtures(createdPayloads)
-    await renderCreateDrawer()
+    installApiFixtures(createdPayloads, [], {
+      userGroups: USER_GROUPS_WITHOUT_AUTO,
+    })
+    await renderDrawer(undefined, USER_GROUPS_WITHOUT_AUTO)
 
-    const autoOrderControl = getControlByLabel('Auto group order')
-    const addGroupTrigger = autoOrderControl.querySelector<HTMLButtonElement>(
-      'button[role="combobox"]'
-    )
-    if (!addGroupTrigger) {
-      throw new Error('Expected Auto group order combobox')
-    }
-    selectComboboxOption(addGroupTrigger, 'Priority access')
+    // The default backend group list never contains "auto", yet a new key must
+    // still follow the derived Auto group instead of silently falling back to
+    // "default".
+    expect(getControlByLabel('Group')).toBe(null)
 
-    expect(
-      document.querySelector('button[aria-label="Remove vip"]')
-    ).toBeTruthy()
-    expect(document.body.textContent?.includes('1 / 3 groups selected')).toBe(
-      true
-    )
-    expect(findButton('Restore global Auto', true).disabled).toBe(false)
-
-    const groupTrigger = getControlByLabel('Group')
-    selectComboboxOption(groupTrigger, 'Standard access')
-    expect(document.querySelector('button[aria-label="Remove vip"]')).toBe(null)
-    selectComboboxOption(groupTrigger, 'Automatic routing')
-
-    expect(
-      document.querySelector('button[aria-label="Remove vip"]')
-    ).toBeTruthy()
-    expect(document.body.textContent?.includes('1 / 3 groups selected')).toBe(
-      true
-    )
-    expect(findButton('Restore global Auto', true).disabled).toBe(false)
-
-    changeInput(getControlByLabel('Name'), 'custom')
+    changeInput(requireControlByLabel('Name') as HTMLInputElement, 'derived')
     fireEvent.click(findButton('Save changes', true))
     await waitFor(() => expect(createdPayloads).toHaveLength(1))
-    expect(createdPayloads[0]?.auto_groups).toEqual(['vip'])
+
+    expect(createdPayloads[0]?.group).toBe('auto')
+    expect(createdPayloads[0]?.auto_groups).toEqual([])
+    expect(createdPayloads[0]?.cross_group_retry).toBe(true)
+  })
+
+  test('keeps an existing Auto key on auto when the backend omits the auto group', async () => {
+    const updatedPayloads: Array<Record<string, unknown>> = []
+    const autoKey = { ...EXISTING_KEY, group: 'auto' }
+    installApiFixtures([], updatedPayloads, {
+      userGroups: USER_GROUPS_WITHOUT_AUTO,
+      existingKey: autoKey,
+    })
+    await renderDrawer(autoKey, USER_GROUPS_WITHOUT_AUTO)
+
+    const groupControl = requireControlByLabel('Group')
+    expect(groupControl.textContent?.includes('Auto')).toBe(true)
+
+    fireEvent.click(findButton('Save changes', true))
+    await waitFor(() => expect(updatedPayloads).toHaveLength(1))
+    expect(updatedPayloads[0]?.group).toBe('auto')
   })
 })

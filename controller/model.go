@@ -262,6 +262,11 @@ func ListModels(c *gin.Context, modelType int) {
 		userModelNames = append(userModelNames, modelName)
 	}
 
+	// The wallet allow-list also caps what the token advertises: with a non-empty
+	// list a balance-only account must be offered exactly the models the wallet
+	// may pay for, not its base group's whole catalogue.
+	userModelNames = service.WalletVisibleModels(c.GetInt("id"), userModelNames)
+
 	ownerByModel := map[string]string{}
 	if len(ownerGroups) > 0 {
 		ownerByModel = getPreferredModelOwners(userModelNames, ownerGroups)

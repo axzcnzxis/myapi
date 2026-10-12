@@ -24,6 +24,7 @@ import {
   FileText,
   FlaskConical,
   Key,
+  KeyRound,
   LayoutDashboard,
   ListTodo,
   Megaphone,
@@ -147,6 +148,12 @@ export function useSidebarData(): SidebarData {
             title: t('Users'),
             url: '/users',
             icon: Users,
+          },
+          {
+            title: t('Key Management'),
+            url: '/key-management',
+            icon: KeyRound,
+            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('Redemption Codes'),

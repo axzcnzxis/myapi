@@ -44,37 +44,28 @@ import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 
 const OPTION_KEYS = {
-  enabled: 'key_support_setting.enabled',
-  derive: 'key_support_setting.derive_from_subscription',
   fusion: 'key_support_setting.fusion_enabled',
   expose: 'key_support_setting.expose_groups',
   maxGroups: 'key_support_setting.max_groups',
   groupPriority: 'key_support_setting.group_priority',
-  balanceEnabled: 'key_support_setting.balance_enabled',
   balanceGroups: 'key_support_setting.balance_groups',
   balanceModels: 'key_support_setting.balance_models',
 } as const
 
 export type KeySupportDefaults = {
-  enabled: boolean
-  derive: boolean
   fusion: boolean
   expose: boolean
   maxGroups: number
   groupPriority: string
-  balanceEnabled: boolean
   balanceGroups: string
   balanceModels: string
 }
 
 const schema = z.object({
-  enabled: z.boolean(),
-  derive: z.boolean(),
   fusion: z.boolean(),
   expose: z.boolean(),
   maxGroups: z.coerce.number().int().min(1),
   groupPriority: z.string(),
-  balanceEnabled: z.boolean(),
   balanceGroups: z.string(),
   balanceModels: z.string(),
 })
@@ -90,22 +81,22 @@ function parseList(raw: string | undefined): string[] {
     try {
       const parsed = JSON.parse(trimmed)
       if (Array.isArray(parsed)) {
-        return Array.from(
-          new Set(parsed.map((item) => String(item).trim()).filter(Boolean))
-        )
+        return [
+          ...new Set(parsed.map((item) => String(item).trim()).filter(Boolean)),
+        ]
       }
     } catch {
       /* fall through to comma splitting */
     }
   }
-  return Array.from(
-    new Set(
+  return [
+    ...new Set(
       trimmed
         .split(/[\n,]/)
         .map((item) => item.trim())
         .filter(Boolean)
-    )
-  )
+    ),
+  ]
 }
 
 function toJsonList(raw: string): string {
@@ -127,31 +118,20 @@ export function KeySupportSection({
   const form = useForm<Values>({
     resolver: zodResolver(schema) as unknown as Resolver<Values>,
     defaultValues: {
-      enabled: defaultValues.enabled,
-      derive: defaultValues.derive,
       fusion: defaultValues.fusion,
       expose: defaultValues.expose,
       maxGroups: defaultValues.maxGroups,
       groupPriority: toDraft(defaultValues.groupPriority),
-      balanceEnabled: defaultValues.balanceEnabled,
       balanceGroups: toDraft(defaultValues.balanceGroups),
       balanceModels: toDraft(defaultValues.balanceModels),
     },
   })
 
   const { isDirty, isSubmitting } = form.formState
-  const enabled = form.watch('enabled')
-  const balanceEnabled = form.watch('balanceEnabled')
 
   async function onSubmit(values: Values) {
     const updates: Array<{ key: string; value: string }> = []
 
-    if (values.enabled !== defaultValues.enabled) {
-      updates.push({ key: OPTION_KEYS.enabled, value: String(values.enabled) })
-    }
-    if (values.derive !== defaultValues.derive) {
-      updates.push({ key: OPTION_KEYS.derive, value: String(values.derive) })
-    }
     if (values.fusion !== defaultValues.fusion) {
       updates.push({ key: OPTION_KEYS.fusion, value: String(values.fusion) })
     }
@@ -168,12 +148,6 @@ export function KeySupportSection({
       updates.push({
         key: OPTION_KEYS.groupPriority,
         value: toJsonList(values.groupPriority),
-      })
-    }
-    if (values.balanceEnabled !== defaultValues.balanceEnabled) {
-      updates.push({
-        key: OPTION_KEYS.balanceEnabled,
-        value: String(values.balanceEnabled),
       })
     }
     if (values.balanceGroups !== toDraft(defaultValues.balanceGroups)) {
@@ -214,14 +188,14 @@ export function KeySupportSection({
 
           <FormField
             control={form.control}
-            name='enabled'
+            name='fusion'
             render={({ field }) => (
               <SettingsSwitchItem>
                 <SettingsSwitchContent>
-                  <FormLabel>{t('Enable key support policy')}</FormLabel>
+                  <FormLabel>{t('Fuse multiple plans')}</FormLabel>
                   <FormDescription>
                     {t(
-                      'Derive API key groups from the user subscriptions and restrict which models the balance may pay for'
+                      'When disabled only the highest-priority subscription group is used instead of fusing every subscribed plan into one key'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>
@@ -236,199 +210,132 @@ export function KeySupportSection({
             )}
           />
 
-          {enabled && (
-            <>
-              <FormField
-                control={form.control}
-                name='derive'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>
-                        {t('Derive groups from subscriptions')}
-                      </FormLabel>
-                      <FormDescription>
-                        {t(
-                          'Keys created with the Auto group inherit the groups of the user active subscriptions; a user without a subscription falls back to the default group'
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={updateOption.isPending || isSubmitting}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='fusion'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Fuse multiple plans')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          'When disabled only the highest-priority subscription group is used instead of fusing every subscribed plan into one key'
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={updateOption.isPending || isSubmitting}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name='expose'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Show actual groups in the key list')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          'Expand the Auto group of a key into the concrete group set it carries'
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={updateOption.isPending || isSubmitting}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              <div className='grid gap-6 sm:grid-cols-2'>
-                <FormField
-                  control={form.control}
-                  name='maxGroups'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Maximum derived groups')}</FormLabel>
-                      <FormControl>
-                        <Input type='number' min={1} {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        {t('Upper bound of groups a single derived key may carry')}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name='groupPriority'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Group priority')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder='vip, svip'
-                          {...field}
-                          value={field.value}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Comma separated, highest priority first. When a model is served by several subscription groups the earlier group wins'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name='balanceEnabled'
-                render={({ field }) => (
-                  <SettingsSwitchItem>
-                    <SettingsSwitchContent>
-                      <FormLabel>{t('Restrict balance usage')}</FormLabel>
-                      <FormDescription>
-                        {t(
-                          'Limit which groups and models the wallet balance may pay for; leave a list empty for no restriction'
-                        )}
-                      </FormDescription>
-                    </SettingsSwitchContent>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={updateOption.isPending || isSubmitting}
-                      />
-                    </FormControl>
-                  </SettingsSwitchItem>
-                )}
-              />
-
-              {balanceEnabled && (
-                <div className='grid gap-6 sm:grid-cols-2'>
-                  <FormField
-                    control={form.control}
-                    name='balanceGroups'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Groups payable by balance')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder='default'
-                            {...field}
-                            value={field.value}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t(
-                            'Comma separated group names. Empty means every group'
-                          )}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+          <FormField
+            control={form.control}
+            name='expose'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>
+                    {t('Show actual groups in the key list')}
+                  </FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Expand the Auto group of a key into the concrete group set it carries'
                     )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={updateOption.isPending || isSubmitting}
                   />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
 
-                  <FormField
-                    control={form.control}
-                    name='balanceModels'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Models payable by balance')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder='gpt-4o-mini, deepseek-chat'
-                            {...field}
-                            value={field.value}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t(
-                            'Comma separated model names. Empty means every model'
-                          )}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+          <div className='grid gap-6 sm:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='maxGroups'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Maximum derived groups')}</FormLabel>
+                  <FormControl>
+                    <Input type='number' min={1} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Upper bound of groups a single derived key may carry')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
               )}
-            </>
-          )}
+            />
+
+            <FormField
+              control={form.control}
+              name='groupPriority'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Group priority')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder='vip, svip'
+                      {...field}
+                      value={field.value}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Comma separated, highest priority first. When a model is served by several subscription groups the earlier group wins'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className='flex flex-col gap-1'>
+            <h3 className='text-sm font-medium'>
+              {t('Balance usage allow-list')}
+            </h3>
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Choose which groups and models the wallet balance may pay for. A listed group is also made reachable for "auto" keys, and a listed model is the only model the wallet path offers, so a balance-only account uses exactly what you list. Leave a list empty for no restriction'
+              )}
+            </p>
+          </div>
+
+          <div className='grid gap-6 sm:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='balanceGroups'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Groups the wallet balance may pay for and reach')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder='default'
+                      {...field}
+                      value={field.value}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Comma separated group names. Empty means every group')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='balanceModels'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    {t('Models the wallet balance may pay for')}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder='gpt-4o-mini, deepseek-chat'
+                      {...field}
+                      value={field.value}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Comma separated model names. Empty means every model')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         </SettingsForm>
       </Form>
     </SettingsSection>

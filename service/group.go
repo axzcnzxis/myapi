@@ -7,6 +7,7 @@ import (
 	"github.com/axzcnzxis/myapi/constant"
 	"github.com/axzcnzxis/myapi/model"
 	"github.com/axzcnzxis/myapi/setting"
+	keysupport "github.com/axzcnzxis/myapi/setting/key_support_setting"
 	"github.com/axzcnzxis/myapi/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
@@ -94,12 +95,15 @@ func GetUserAutoGroup(userGroup string) []string {
 
 // FilterUserTokenAutoGroups applies current permissions before the current
 // per-token limit. It intentionally does not fall back to the global Auto list.
-func FilterUserTokenAutoGroups(userGroup string, groups []string) []string {
+// walletGroups carries the wallet allow-list granted to the request, whose
+// members bypass the selectable-group entitlement — the administrator explicitly
+// allowed the wallet to pay for them — but still require a group ratio.
+func FilterUserTokenAutoGroups(userGroup string, groups []string, walletGroups []string) []string {
 	maxCount := setting.GetMaxTokenAutoGroups()
 	filtered := make([]string, 0, min(len(groups), maxCount))
 	seen := make(map[string]struct{})
 	for _, group := range groups {
-		if !IsUserSelectableGroup(userGroup, group) {
+		if !IsUserSelectableGroup(userGroup, group) && !walletGroupAllowed(group, walletGroups) {
 			continue
 		}
 		if _, ok := seen[group]; ok {
@@ -114,6 +118,26 @@ func FilterUserTokenAutoGroups(userGroup string, groups []string) []string {
 	return filtered
 }
 
+// walletGroupAllowed reports whether the wallet allow-list makes group reachable
+// for the current request.
+func walletGroupAllowed(group string, walletGroups []string) bool {
+	if group == "" || group == "auto" {
+		return false
+	}
+	return keysupport.ContainsGroup(walletGroups, group) && ratio_setting.ContainsGroupRatio(group)
+}
+
+// GetRequestWalletGroups returns the wallet allow-list granted to the current
+// request, or nil when the request carries none.
+func GetRequestWalletGroups(c *gin.Context) []string {
+	value, ok := common.GetContextKey(c, constant.ContextKeyTokenWalletGroups)
+	if !ok {
+		return nil
+	}
+	groups, _ := value.([]string)
+	return groups
+}
+
 // GetRequestAutoGroups resolves the ordered Auto groups for the current token.
 // The absence of the context value means that the token inherits the complete
 // global Auto list; a present (even empty) value is an explicit token snapshot.
@@ -126,7 +150,7 @@ func GetRequestAutoGroups(c *gin.Context, userGroup string) []string {
 	if !ok {
 		return []string{}
 	}
-	return FilterUserTokenAutoGroups(userGroup, groups)
+	return FilterUserTokenAutoGroups(userGroup, groups, GetRequestWalletGroups(c))
 }
 
 // GetGroupsEnabledModels 按 groups 顺序获取各分组启用的模型并去重

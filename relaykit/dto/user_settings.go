@@ -1,5 +1,10 @@
 package dto
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 type UserSetting struct {
 	NotifyType                       string  `json:"notify_type,omitempty"`                          // QuotaWarningType 额度预警类型
 	QuotaWarningThreshold            float64 `json:"quota_warning_threshold,omitempty"`              // QuotaWarningThreshold 额度预警阈值
@@ -16,6 +21,30 @@ type UserSetting struct {
 	SidebarModules                   string  `json:"sidebar_modules,omitempty"`                      // SidebarModules 左侧边栏模块配置
 	BillingPreference                string  `json:"billing_preference,omitempty"`                   // BillingPreference 扣费策略（订阅/钱包）
 	Language                         string  `json:"language,omitempty"`                             // Language 用户语言偏好 (zh, en)
+	WalletBalanceGroups              string  `json:"wallet_balance_groups,omitempty"`                // 管理员按用户覆盖：钱包可支付的分组（JSON 数组字符串，空=继承全局）
+	WalletBalanceModels              string  `json:"wallet_balance_models,omitempty"`                // 管理员按用户覆盖：钱包可支付的模型（JSON 数组字符串，空=继承全局）
+}
+
+// GetWalletBalanceGroups 解析按用户覆盖的钱包可支付分组；空串/非法 JSON 返回 nil（继承全局）。
+func (s UserSetting) GetWalletBalanceGroups() []string {
+	return parseWalletList(s.WalletBalanceGroups)
+}
+
+// GetWalletBalanceModels 解析按用户覆盖的钱包可支付模型；空串/非法 JSON 返回 nil（继承全局）。
+func (s UserSetting) GetWalletBalanceModels() []string {
+	return parseWalletList(s.WalletBalanceModels)
+}
+
+func parseWalletList(raw string) []string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "null" {
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal([]byte(trimmed), &list); err != nil {
+		return nil
+	}
+	return list
 }
 
 var (

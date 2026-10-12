@@ -621,14 +621,19 @@ func TokenAuth() func(c *gin.Context) {
 		// 用户分组可能是逗号分隔的集合；令牌未指定分组时，使用集合中的首个分组。
 		usingGroup := model.PrimaryUserGroup(userGroup)
 		if tokenGroup != "" {
-			// check common.UserUsableGroups[userGroup]
-			if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
-				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
-				return
-			}
-			// check group in common.GroupRatio
-			if !ratio_setting.ContainsGroupRatio(tokenGroup) {
-				if tokenGroup != "auto" {
+			// "auto" is a virtual group: it is never listed in UserUsableGroups,
+			// because a token bound to it is resolved per request to the groups the
+			// user may actually use — service.GetRequestAutoGroups re-validates every
+			// derived group against the user's usable groups and the group ratios. So
+			// neither the membership test nor the deprecation test applies to it.
+			if tokenGroup != "auto" {
+				// check common.UserUsableGroups[userGroup]
+				if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
+					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("无权访问 %s 分组", tokenGroup))
+					return
+				}
+				// check group in common.GroupRatio
+				if !ratio_setting.ContainsGroupRatio(tokenGroup) {
 					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
 					return
 				}
@@ -689,20 +694,35 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 	}
 	common.SetContextKey(c, constant.ContextKeyTokenGroup, token.Group)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
-	if token.AutoGroups != "" {
+	if token.Group == "auto" {
+		// A token bound to the "auto" group always follows the user's *current*
+		// entitlement: the groups served by their active subscriptions, ordered by
+		// the configured priority, or the user's base group when nothing is
+		// subscribed. Resolving it on every request means a subscription that was
+		// added, invalidated, deleted or has just expired takes effect at once —
+		// including for keys created before the change, whose stored snapshot is
+		// stale. That snapshot is only a fallback for an unreadable entitlement so
+		// an unrelated database hiccup never leaves the key unroutable.
+		var snapshot []string
+		if token.AutoGroups != "" {
+			parsed, err := token.GetAutoGroups()
+			if err != nil {
+				common.SysError(fmt.Sprintf("failed to parse auto groups for token %d: %v", token.Id, err))
+			} else {
+				snapshot = parsed
+			}
+		}
+		common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, service.EffectiveAutoGroups(token.UserId, snapshot))
+		// The wallet allow-list both restricts what the balance may pay for and
+		// grants reachability to the listed groups, so the request must carry it
+		// for the auto-group filter to keep those granted groups.
+		common.SetContextKey(c, constant.ContextKeyTokenWalletGroups, service.WalletGroupsForUser(token.UserId))
+	} else if token.AutoGroups != "" {
 		autoGroups, err := token.GetAutoGroups()
 		if err != nil {
 			common.SysError(fmt.Sprintf("failed to parse auto groups for token %d: %v", token.Id, err))
-			autoGroups = []string{}
-			common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, autoGroups)
+			common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, []string{})
 		} else if len(autoGroups) > 0 {
-			// A token bound to the "auto" group follows the user's *current*
-			// subscriptions: trim its stored snapshot to the groups still served
-			// by an active subscription before the router and the billing path
-			// read it, so an invalidated or expired plan stops routing right away.
-			if token.Group == "auto" {
-				autoGroups = service.EffectiveAutoGroups(token.UserId, autoGroups)
-			}
 			common.SetContextKey(c, constant.ContextKeyTokenAutoGroups, autoGroups)
 		}
 	}

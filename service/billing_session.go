@@ -392,9 +392,15 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 
 	// 钱包路径需要先检查用户额度
 	tryWallet := func() (*BillingSession, *types.NewAPIError) {
-		// 管理员可限制余额可支付的分组/模型；命中限制时不再用钱包扣费，
-		// 让调用方按 ErrorCodeInsufficientUserQuota 回退到订阅（若有）。
-		if walletErr := keysupport.CheckWalletAllowed(relayInfo.UsingGroup, relayInfo.GetBillingModelName()); walletErr != nil {
+		// 管理员可限制余额可支付的分组/模型（全局或按用户覆盖），列表非空即生效；
+		// 命中限制时不再用钱包扣费，让调用方按 ErrorCodeInsufficientUserQuota 回退到订阅（若有）。
+		userSetting := relayInfo.UserSetting
+		if walletErr := keysupport.CheckWalletAllowedForUser(
+			userSetting.GetWalletBalanceGroups(),
+			userSetting.GetWalletBalanceModels(),
+			relayInfo.UsingGroup,
+			relayInfo.GetBillingModelName(),
+		); walletErr != nil {
 			return nil, types.NewErrorWithStatusCode(
 				walletErr,
 				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
