@@ -36,7 +36,7 @@
 | 本仓库 | <https://github.com/axzcnzxis/myapi> |
 | 上游项目 | <https://github.com/QuantumNous/new-api> |
 | 上游基线 | `v1.0.0-rc.41`（git 提交 `973cf8ef4`） |
-| 本仓库版本号 | 见 [`VERSION`](./VERSION)（当前 `v0.0.10`） |
+| 本仓库版本号 | 见 [`VERSION`](./VERSION)（当前 `v0.0.12`） |
 | 许可 | AGPL-3.0（含 Section 7 附加条款，见 [`LICENSE`](./LICENSE) / [`NOTICE`](./NOTICE)） |
 
 > 本仓库是**衍生作品**，不是 new-api 官方仓库。上游与本仓库的文档、Issue、Release 互不相通，请勿把本仓库的问题反馈到上游。
@@ -292,6 +292,17 @@ docker run --name myapi -d --restart unless-stopped \
 需要从源码构建镜像时：`docker build -t myapi:local .`，再把上面的镜像名换成 `myapi:local`。
 
 ### 更新版本
+
+**一键更新（推荐）**：复用安装脚本，拉取最新预构建镜像并重建容器，保留 `.env` 与全部数据（幂等，可反复执行）。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/axzcnzxis/myapi/main/install.sh | bash
+```
+
+- 默认在 `./myapi` 内更新；安装目录不同时用 `MYAPI_DIR=/path/to/myapi` 指定。
+- 只拉取 `ghcr.io/axzcnzxis/myapi:latest` 并重建 myapi 容器，不会改动数据库与 Redis。
+
+**手动更新**：
 
 ```bash
 cd <安装目录>
