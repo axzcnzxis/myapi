@@ -130,21 +130,23 @@ function isBrowserOnline(): boolean {
 export function useSystemUpdate() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
-  const isAdmin = (user?.role ?? 0) >= ROLE.ADMIN
+  // Only the root account may see or act on panel updates. Later administrators
+  // must not even learn that a release exists, so the gate is root, not admin.
+  const isRoot = (user?.role ?? 0) >= ROLE.SUPER_ADMIN
   const visible = useSyncExternalStore(focusManager.subscribe, isPageVisible)
   const online = useSyncExternalStore(onlineManager.subscribe, isBrowserOnline)
   const { status } = useStatus()
   const queryClient = useQueryClient()
   const query = useQuery({
     ...systemUpdateQueryOptions,
-    enabled: isAdmin && visible && online,
+    enabled: isRoot && visible && online,
   })
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!isRoot) {
       void queryClient.cancelQueries({ queryKey: SYSTEM_UPDATE_QUERY_KEY })
     }
-  }, [isAdmin, queryClient])
+  }, [isRoot, queryClient])
 
   const version = status?.version?.trim()
   const currentVersion =
@@ -165,14 +167,14 @@ export function useSystemUpdate() {
   )
 
   const setIgnored = (ignored: boolean) => {
-    if (!isAdmin || !user || !release) return
+    if (!isRoot || !user || !release) return
     useSystemUpdatePreferencesStore
       .getState()
       .setVersionIgnored(user.id, release.tag_name, ignored)
   }
 
   const checkNow = async () => {
-    if (!isAdmin || !online) return
+    if (!isRoot || !online) return
     const result = await query.refetch({ cancelRefetch: false })
     if (result.data?.error) {
       handleServerError(new Error(getUpdateErrorMessage(result.data.error, t)))
@@ -185,7 +187,7 @@ export function useSystemUpdate() {
     comparison,
     hasUpdate,
     isIgnored,
-    shouldNotify: isAdmin && hasUpdate && !isIgnored,
+    shouldNotify: isRoot && hasUpdate && !isIgnored,
     setIgnored,
     checking: query.isFetching,
     online,

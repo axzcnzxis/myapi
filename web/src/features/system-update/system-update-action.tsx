@@ -42,14 +42,15 @@ type SystemUpdateActionProps = {
 }
 
 export function SystemUpdateAction(props: SystemUpdateActionProps) {
-  const isAdmin = useAuthStore(
-    (state) => (state.auth.user?.role ?? 0) >= ROLE.ADMIN
+  // Panel updates are root-only: later administrators must not see the entry.
+  const isRoot = useAuthStore(
+    (state) => (state.auth.user?.role ?? 0) >= ROLE.SUPER_ADMIN
   )
-  if (!isAdmin) return null
-  return <AdminSystemUpdateAction {...props} />
+  if (!isRoot) return null
+  return <RootSystemUpdateAction {...props} />
 }
 
-function AdminSystemUpdateAction(props: SystemUpdateActionProps) {
+function RootSystemUpdateAction(props: SystemUpdateActionProps) {
   const { t } = useTranslation()
   const update = useSystemUpdate()
   const [open, setOpen] = useState(false)

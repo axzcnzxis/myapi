@@ -347,3 +347,16 @@ const (
 	MsgCustomOAuthBindingNotFound   = "custom_oauth.binding_not_found"
 	MsgCustomOAuthProviderIdInvalid = "custom_oauth.provider_id_field_invalid"
 )
+
+// System self-update messages
+const (
+	MsgSystemUpdateUnsupported    = "system_update.unsupported"
+	MsgSystemUpdateInvalidVersion = "system_update.invalid_version"
+	MsgSystemUpdateNotNewer       = "system_update.not_newer"
+	MsgSystemUpdateInProgress     = "system_update.in_progress"
+	MsgSystemUpdateDownloadFailed = "system_update.download_failed"
+	MsgSystemUpdateChecksumFailed = "system_update.checksum_failed"
+	MsgSystemUpdateInstallFailed  = "system_update.install_failed"
+	MsgSystemUpdateRestartFailed  = "system_update.restart_failed"
+	MsgSystemUpdateFailed         = "system_update.failed"
+)

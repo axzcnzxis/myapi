@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { lazy, Suspense, type ReactElement } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
@@ -24,9 +24,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
 import { formatTimestampToDate } from '@/lib/format'
 
 import { getSystemReleaseUrl, parseSystemVersion } from './releases'
+import {
+  getSelfUpdateErrorMessage,
+  getSelfUpdateStateLabel,
+  getSelfUpdateUnsupportedReason,
+  useSelfUpdate,
+} from './use-self-update'
 import {
   getUpdateErrorMessage,
   type useSystemUpdate,
@@ -56,6 +63,28 @@ export function SystemUpdateDialog(props: SystemUpdateDialogProps) {
     (release.prerelease ||
       (parseSystemVersion(release.tag_name)?.stage ?? 3) < 3)
   const canIgnore = release && (update.hasUpdate || update.comparison === null)
+
+  // The install capability and progress come from the server, so it is polled
+  // only while the dialog is open.
+  const selfUpdate = useSelfUpdate({ enabled: props.open })
+  const status = selfUpdate.status
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    if (!props.open) setConfirming(false)
+  }, [props.open])
+
+  const canInstall =
+    update.hasUpdate &&
+    Boolean(release) &&
+    status?.supported === true &&
+    status.writable === true
+  const installBlocked =
+    update.hasUpdate &&
+    Boolean(release) &&
+    status?.supported === true &&
+    !status.writable
+
   let statusText = t('Updates have not been checked yet.')
   if (update.checking) {
     statusText = t('Checking updates...')
@@ -75,6 +104,77 @@ export function SystemUpdateDialog(props: SystemUpdateDialogProps) {
     statusText = t('No releases found.')
   }
 
+  let footer: React.ReactNode
+  if (selfUpdate.installing) {
+    // Nothing to act on while the panel replaces itself and restarts.
+    footer = undefined
+  } else if (confirming && release) {
+    footer = (
+      <>
+        <Button
+          type='button'
+          variant='ghost'
+          className='sm:me-auto'
+          onClick={() => setConfirming(false)}
+        >
+          {t('Cancel')}
+        </Button>
+        <Button
+          type='button'
+          disabled={selfUpdate.starting}
+          onClick={() => {
+            selfUpdate.start(release.tag_name)
+            setConfirming(false)
+          }}
+        >
+          {selfUpdate.starting && <Spinner data-icon='inline-start' />}
+          {t('Confirm update')}
+        </Button>
+      </>
+    )
+  } else {
+    footer = (
+      <>
+        {(canIgnore || update.isIgnored) && (
+          <Button
+            type='button'
+            variant='ghost'
+            className='sm:me-auto'
+            onClick={() => update.setIgnored(!update.isIgnored)}
+          >
+            {update.isIgnored
+              ? t('Restore notifications')
+              : t('Ignore this version')}
+          </Button>
+        )}
+        <Button
+          type='button'
+          variant='outline'
+          disabled={update.checking || !update.online}
+          onClick={() => void update.checkNow()}
+        >
+          {update.checking ? t('Checking updates...') : t('Check again')}
+        </Button>
+        {releaseUrl && (
+          <Button
+            nativeButton={false}
+            role='link'
+            render={
+              <a href={releaseUrl} target='_blank' rel='noopener noreferrer' />
+            }
+          >
+            {t('Go to GitHub')}
+          </Button>
+        )}
+        {canInstall && (
+          <Button type='button' onClick={() => setConfirming(true)}>
+            {t('Update now')}
+          </Button>
+        )}
+      </>
+    )
+  }
+
   return (
     <Dialog
       open={props.open}
@@ -83,45 +183,7 @@ export function SystemUpdateDialog(props: SystemUpdateDialogProps) {
       title={t('System updates')}
       bodyClassName='space-y-4'
       footerClassName='sm:flex-wrap'
-      footer={
-        <>
-          {(canIgnore || update.isIgnored) && (
-            <Button
-              type='button'
-              variant='ghost'
-              className='sm:me-auto'
-              onClick={() => update.setIgnored(!update.isIgnored)}
-            >
-              {update.isIgnored
-                ? t('Restore notifications')
-                : t('Ignore this version')}
-            </Button>
-          )}
-          <Button
-            type='button'
-            variant='outline'
-            disabled={update.checking || !update.online}
-            onClick={() => void update.checkNow()}
-          >
-            {update.checking ? t('Checking updates...') : t('Check again')}
-          </Button>
-          {releaseUrl && (
-            <Button
-              nativeButton={false}
-              role='link'
-              render={
-                <a
-                  href={releaseUrl}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                />
-              }
-            >
-              {t('Go to GitHub')}
-            </Button>
-          )}
-        </>
-      }
+      footer={footer}
     >
       <dl className='grid min-w-0 gap-3 text-sm sm:grid-cols-2'>
         <div className='min-w-0'>
@@ -169,6 +231,65 @@ export function SystemUpdateDialog(props: SystemUpdateDialogProps) {
             {getUpdateErrorMessage(snapshot.error, t)}
             {release && (
               <p>{t('Showing the last successfully checked release.')}</p>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {selfUpdate.installing && status && (
+        <Alert>
+          <AlertDescription>
+            <span className='flex items-center gap-2'>
+              <Spinner aria-hidden='true' />
+              <span role='status' aria-live='polite'>
+                {getSelfUpdateStateLabel(status.state, t)}
+              </span>
+            </span>
+            {selfUpdate.awaitingRestart && (
+              <p>
+                {t(
+                  'The panel is restarting. This page reloads automatically when the new version is running.'
+                )}
+              </p>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {selfUpdate.errorCode && !selfUpdate.installing && (
+        <Alert variant='destructive'>
+          <AlertDescription>
+            {getSelfUpdateErrorMessage(selfUpdate.errorCode, t)}
+          </AlertDescription>
+        </Alert>
+      )}
+      {update.hasUpdate && release && status && !status.supported && (
+        <Alert variant='destructive'>
+          <AlertDescription>
+            {getSelfUpdateUnsupportedReason(status.reason, t)}
+          </AlertDescription>
+        </Alert>
+      )}
+      {installBlocked && status && (
+        <Alert variant='destructive'>
+          <AlertDescription>
+            {getSelfUpdateUnsupportedReason('writable', t)}
+          </AlertDescription>
+        </Alert>
+      )}
+      {update.hasUpdate && release && status?.container && (
+        <Alert>
+          <AlertDescription>
+            {t(
+              'This panel runs in a container. The update is lost when the container is recreated from its image.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {confirming && release && (
+        <Alert>
+          <AlertDescription>
+            {t(
+              'This replaces the running panel program with {{version}} and restarts the panel. The page reloads when the new version is running.',
+              { version: release.tag_name }
             )}
           </AlertDescription>
         </Alert>

@@ -377,6 +377,15 @@ func SetApiRouter(router *gin.Engine) {
 			systemInfoRoute.DELETE("/instances/:node_name", controller.DeleteStaleSystemInstance)
 		}
 
+		// Replacing the panel's own executable is a server-level operation, so
+		// it stays with the other root-only routes.
+		systemUpdateRoute := apiRouter.Group("/system-update")
+		systemUpdateRoute.Use(middleware.RootAuth())
+		{
+			systemUpdateRoute.GET("/status", controller.GetSystemUpdateStatus)
+			systemUpdateRoute.POST("/apply", middleware.CriticalRateLimit(), controller.ApplySystemUpdate)
+		}
+
 		dataRoute := apiRouter.Group("/data")
 		dataRoute.GET("/", middleware.AdminAuth(), controller.GetAllQuotaDates)
 		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)

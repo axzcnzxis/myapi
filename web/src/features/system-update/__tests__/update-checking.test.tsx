@@ -78,7 +78,7 @@ beforeEach(() => {
   useSystemUpdatePreferencesStore.setState({ ignoredVersionsByUserId: {} })
   useAuthStore
     .getState()
-    .auth.setUser({ id: 1, username: 'admin', role: ROLE.ADMIN })
+    .auth.setUser({ id: 1, username: 'root', role: ROLE.SUPER_ADMIN })
   focusManager.setFocused(true)
   onlineManager.setOnline(true)
   fetchMock.mockReset()
@@ -106,7 +106,7 @@ afterEach(() => {
 })
 
 describe('administrator update entry', () => {
-  test.each([null, ROLE.USER])(
+  test.each([null, ROLE.USER, ROLE.ADMIN])(
     'hides the entry and makes no release request for role %s',
     (role) => {
       useAuthStore
@@ -124,10 +124,10 @@ describe('administrator update entry', () => {
     }
   )
 
-  test.each([ROLE.ADMIN, ROLE.SUPER_ADMIN])(
-    'automatically shows the update indicator for administrator role %s without opening a dialog',
+  test.each([ROLE.SUPER_ADMIN])(
+    'automatically shows the update indicator for the root administrator role %s without opening a dialog',
     async (role) => {
-      useAuthStore.getState().auth.setUser({ id: 1, username: 'admin', role })
+      useAuthStore.getState().auth.setUser({ id: 1, username: 'root', role })
       render(<SystemUpdateAction />, { wrapper: Wrapper })
       const button = await screen.findByRole('button', {
         name: 'New version available: v1.0.0-rc.36',
@@ -362,9 +362,7 @@ describe('administrator update entry', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Check again' }))
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))
-    expect(
-      screen.getByText('Failed to check for updates')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Failed to check for updates')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
@@ -424,9 +422,7 @@ describe('version label presentation', () => {
       expect.stringContaining('Failed to check for updates')
     )
     await user.click(trigger)
-    expect(
-      screen.getByText('Failed to check for updates')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Failed to check for updates')).toBeInTheDocument()
   })
 
   test('keeps a long version accessible in the tooltip while constraining its visible label', async () => {
@@ -472,7 +468,7 @@ describe('version notification preferences', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  test('keeps preferences across logout and isolates ignore and restore actions by administrator', async () => {
+  test('keeps preferences across logout and isolates ignore and restore actions by root account', async () => {
     const hook = renderHook(useSystemUpdate, { wrapper: Wrapper })
     await waitFor(() => expect(hook.result.current.shouldNotify).toBe(true))
     act(() => hook.result.current.setIgnored(true))
@@ -481,14 +477,14 @@ describe('version notification preferences', () => {
     act(() =>
       useAuthStore
         .getState()
-        .auth.setUser({ id: 2, username: 'other-admin', role: ROLE.ADMIN })
+        .auth.setUser({ id: 2, username: 'other-root', role: ROLE.SUPER_ADMIN })
     )
     expect(hook.result.current.shouldNotify).toBe(true)
     act(() => hook.result.current.setIgnored(true))
     act(() =>
       useAuthStore
         .getState()
-        .auth.setUser({ id: 1, username: 'admin', role: ROLE.ADMIN })
+        .auth.setUser({ id: 1, username: 'root', role: ROLE.SUPER_ADMIN })
     )
     expect(hook.result.current.isIgnored).toBe(true)
     act(() => hook.result.current.setIgnored(false))
@@ -496,7 +492,7 @@ describe('version notification preferences', () => {
     act(() =>
       useAuthStore
         .getState()
-        .auth.setUser({ id: 2, username: 'other-admin', role: ROLE.ADMIN })
+        .auth.setUser({ id: 2, username: 'other-root', role: ROLE.SUPER_ADMIN })
     )
     expect(hook.result.current.isIgnored).toBe(true)
     expect(hook.result.current.shouldNotify).toBe(false)
